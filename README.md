@@ -51,40 +51,31 @@ If you're upgrading from the original single-user Streamlit version of this app,
 
 ## Deployment
 
-Recommended combo: **Vercel** for the frontend (free, trivial for a Vite app) + **Fly.io** for the backend (free tier, and it supports a small *persistent volume* so the SQLite file survives redeploys — most other free hosts wipe the filesystem on every deploy).
+**Vercel** for the frontend, **Render** for the backend. No Docker needed — both run the code directly.
 
-### Backend → Fly.io
+### Backend → Render
 
-```bash
-cd backend
-fly launch          # detects the Dockerfile; say no to a Postgres/Redis add-on
-fly volumes create expense_data --size 1 --region <your-region>
-fly secrets set SECRET_KEY=$(openssl rand -hex 32)
-fly deploy
-```
+1. New **Web Service** on Render, pointing at this GitHub repo, with **root directory** set to `backend`.
+2. Build command: `pip install -r requirements.txt`
+3. Start command: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+4. Add environment variables:
+   - `SECRET_KEY` — any long random string (e.g. generate one with `openssl rand -hex 32`). This signs login sessions.
+   - `ALLOWED_ORIGINS` — leave blank for now, come back and set it once the frontend is deployed (see below).
+5. Deploy, then note the backend's URL (e.g. `https://your-app.onrender.com`).
 
-- `fly.toml` already points `DB_PATH` at `/data/expenses.db`, the mounted volume — don't skip creating the volume, or your data will disappear on the next deploy.
-- `SECRET_KEY` signs login sessions; setting it explicitly (instead of relying on the auto-generated file) keeps existing logins valid across redeploys.
-- Note your backend's URL (e.g. `https://your-expense-tracker-api.fly.dev`) — you'll need it next.
+Render's free tier has an **ephemeral disk** — `expenses.db` can be wiped on redeploy or after the service spins down from inactivity. That's fine to start with; if you need the data to persist long-term, upgrade to a paid instance with a persistent disk later.
 
 ### Frontend → Vercel
 
-1. Import the GitHub repo into Vercel (it auto-detects the Vite project in `frontend/` — set the project's **root directory** to `frontend`).
-2. Add an environment variable: `VITE_API_URL` = your Fly.io backend URL from above.
-3. Deploy.
+1. Import the GitHub repo into Vercel, with the project's **root directory** set to `frontend` (it auto-detects the Vite setup).
+2. Add an environment variable: `VITE_API_URL` = your Render backend URL from above.
+3. Deploy, then note the frontend's URL (e.g. `https://your-app.vercel.app`).
 
-### After both are live
+### Last step
 
-Update `ALLOWED_ORIGINS` for the backend so it accepts requests from your deployed frontend:
-
-```bash
-cd backend
-fly secrets set ALLOWED_ORIGINS=https://your-frontend.vercel.app
-```
-
-(Local dev origins are always allowed by default, so this only needs the production URL.)
+Go back to Render and set `ALLOWED_ORIGINS` to your Vercel URL, so the backend accepts requests from it (local dev origins are always allowed by default, so this only needs the production URL).
 
 ## Notes
 
-- Without `SECRET_KEY` set, the backend generates a random JWT signing secret on first run and stores it in `backend/.secret_key` (gitignored, and wiped on every Fly.io redeploy unless you set `SECRET_KEY` as shown above).
+- Without `SECRET_KEY` set, the backend generates a random JWT signing secret on first run and stores it in `backend/.secret_key` (gitignored) — set `SECRET_KEY` explicitly in production so logins survive redeploys.
 - `expenses.db` is gitignored — never commit real expense data to the repo.
