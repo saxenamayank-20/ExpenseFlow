@@ -1,0 +1,574 @@
+import { useEffect, useMemo, useState } from "react";
+import {
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  Legend,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  LineChart,
+  Line,
+} from "recharts";
+import {
+  Wallet,
+  Receipt,
+  TrendingUp,
+  HeartPulse,
+  Plus,
+  Download,
+  Trash2,
+  Save,
+  X,
+} from "lucide-react";
+import toast from "react-hot-toast";
+import { useAuth } from "../context/AuthContext";
+import { api } from "../api";
+import StatCard from "../components/StatCard";
+
+const PIE_COLORS = ["#7c3aed", "#a855f7", "#ec4899", "#f472b6", "#c084fc", "#f97316", "#22c55e", "#3b82f6", "#94a3b8"];
+
+const TABS = [
+  { key: "overview", label: "Overview" },
+  { key: "add", label: "Add Expense" },
+  { key: "history", label: "History & Manage" },
+];
+
+const todayStr = () => new Date().toISOString().slice(0, 10);
+
+function currency(n) {
+  return `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+}
+
+export default function Dashboard() {
+  const { token } = useAuth();
+  const [meta, setMeta] = useState({ categories: [], payment_methods: [] });
+  const [expenses, setExpenses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState("overview");
+
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [historyCategory, setHistoryCategory] = useState("");
+
+  const [selectedId, setSelectedId] = useState(null);
+  const [editForm, setEditForm] = useState(null);
+
+  const [addForm, setAddForm] = useState({
+    expense_date: todayStr(),
+    amount: "",
+    category: "",
+    description: "",
+    payment_method: "",
+  });
+  const [addSubmitting, setAddSubmitting] = useState(false);
+
+  const loadExpenses = async () => {
+    const data = await api.listExpenses(token);
+    setExpenses(data);
+    if (data.length) {
+      const dates = data.map((e) => e.expense_date).sort();
+      setStartDate((s) => s || dates[0]);
+      setEndDate((e) => e || dates[dates.length - 1]);
+    }
+  };
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [metaData] = await Promise.all([api.meta(), loadExpenses()]);
+        setMeta(metaData);
+        setAddForm((f) => ({
+          ...f,
+          category: metaData.categories[0] || "",
+          payment_method: metaData.payment_methods[0] || "",
+        }));
+      } catch (err) {
+        toast.error(err.message);
+      } finally {
+        setLoading(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const dateFiltered = useMemo(() => {
+    return expenses.filter((e) => {
+      if (startDate && e.expense_date < startDate) return false;
+      if (endDate && e.expense_date > endDate) return false;
+      return true;
+    });
+  }, [expenses, startDate, endDate]);
+
+  // History tab: date range + its own independent category dropdown, so
+  // switching categories there never affects the Overview tab.
+  const historyFiltered = useMemo(() => {
+    if (!historyCategory) return dateFiltered;
+    return dateFiltered.filter((e) => e.category === historyCategory);
+  }, [dateFiltered, historyCategory]);
+
+  const total = dateFiltered.reduce((s, e) => s + e.amount, 0);
+  const count = dateFiltered.length;
+  const average = count ? total / count : 0;
+  const medical = dateFiltered.filter((e) => e.category === "Medical").reduce((s, e) => s + e.amount, 0);
+
+  const categoryData = useMemo(() => {
+    const map = {};
+    dateFiltered.forEach((e) => {
+      map[e.category] = (map[e.category] || 0) + e.amount;
+    });
+    return Object.entries(map).map(([name, value]) => ({ name, value }));
+  }, [dateFiltered]);
+
+  const dailyData = useMemo(() => {
+    const map = {};
+    dateFiltered.forEach((e) => {
+      map[e.expense_date] = (map[e.expense_date] || 0) + e.amount;
+    });
+    return Object.entries(map)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, amount]) => ({
+        date: date.slice(5),
+        amount,
+      }));
+  }, [dateFiltered]);
+
+  const monthlyData = useMemo(() => {
+    const map = {};
+    dateFiltered.forEach((e) => {
+      const month = e.expense_date.slice(0, 7);
+      map[month] = (map[month] || 0) + e.amount;
+    });
+    return Object.entries(map)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, amount]) => ({ month, amount }));
+  }, [dateFiltered]);
+
+  const handleAddSubmit = async (e) => {
+    e.preventDefault();
+    if (Number(addForm.amount) <= 0) {
+      toast.error("Please enter an amount greater than ₹0.");
+      return;
+    }
+    if (!addForm.description.trim()) {
+      toast.error("Please add a description.");
+      return;
+    }
+    setAddSubmitting(true);
+    try {
+      await api.addExpense(
+        { ...addForm, amount: Number(addForm.amount), description: addForm.description.trim() },
+        token
+      );
+      toast.success("Expense added!");
+      setAddForm((f) => ({ ...f, amount: "", description: "" }));
+      await loadExpenses();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setAddSubmitting(false);
+    }
+  };
+
+  const selectRow = (row) => {
+    setSelectedId(row.id);
+    setEditForm({ ...row, amount: String(row.amount) });
+  };
+
+  const handleUpdate = async (e) => {
+    e.preventDefault();
+    if (Number(editForm.amount) <= 0 || !editForm.description.trim()) {
+      toast.error("Amount and description are required.");
+      return;
+    }
+    try {
+      await api.updateExpense(
+        selectedId,
+        { ...editForm, amount: Number(editForm.amount), description: editForm.description.trim() },
+        token
+      );
+      toast.success("Expense updated!");
+      setSelectedId(null);
+      setEditForm(null);
+      await loadExpenses();
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await api.deleteExpense(selectedId, token);
+      toast.success("Transaction deleted!");
+      setSelectedId(null);
+      setEditForm(null);
+      await loadExpenses();
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
+
+  const exportCsv = () => {
+    const header = ["Date", "Amount", "Category", "Description", "Payment Method"];
+    const rows = historyFiltered.map((e) => [e.expense_date, e.amount, e.category, e.description, e.payment_method]);
+    const csv = [header, ...rows].map((r) => r.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", "expenses.csv");
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-10 h-10 rounded-full border-4 border-brand-200 border-t-brand-600 animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-7xl mx-auto px-6 sm:px-8 py-8">
+      <div className="flex items-center gap-3 mb-1">
+        <div className="w-10 h-10 rounded-xl bg-brand-gradient flex items-center justify-center">
+          <Wallet className="w-5 h-5 text-white" />
+        </div>
+        <h1 className="text-2xl font-bold text-slate-900">My Expense Tracker</h1>
+      </div>
+      <p className="text-slate-500 mb-6 ml-[3.25rem]">Track, filter, and understand your spending.</p>
+
+      <div className="flex flex-wrap items-end gap-3 bg-white rounded-2xl shadow-card p-4 mb-6">
+        <div>
+          <label className="block text-xs font-medium text-slate-500 mb-1">From</label>
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-500 mb-1">To</label>
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+          />
+        </div>
+      </div>
+
+      <div className="flex gap-1 mb-6 bg-white rounded-xl shadow-card p-1 w-fit">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+              tab === t.key ? "bg-brand-gradient text-white shadow-glow" : "text-slate-600 hover:bg-slate-100"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "overview" && (
+        <div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <StatCard icon={Wallet} label="Total Spent" value={currency(total)} accent={{ bg: "#f5f3ff", fg: "#7c3aed" }} />
+            <StatCard icon={Receipt} label="Transactions" value={count} accent={{ bg: "#fdf2f8", fg: "#ec4899" }} />
+            <StatCard icon={TrendingUp} label="Average Expense" value={currency(average)} accent={{ bg: "#fff7ed", fg: "#f97316" }} />
+            <StatCard icon={HeartPulse} label="Medical Spending" value={currency(medical)} accent={{ bg: "#fef2f2", fg: "#ef4444" }} />
+          </div>
+
+          {!dateFiltered.length ? (
+            <div className="bg-white rounded-2xl shadow-card p-12 text-center text-slate-400">
+              No expenses match your current filters. Add one from the "Add Expense" tab.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
+              <div className="bg-white rounded-2xl shadow-card p-5">
+                <h3 className="font-semibold text-slate-800 mb-3">Spending by Category</h3>
+                <ResponsiveContainer width="100%" height={280}>
+                  <PieChart>
+                    <Pie data={categoryData} dataKey="value" nameKey="name" innerRadius={60} outerRadius={95} paddingAngle={2}>
+                      {categoryData.map((_, i) => (
+                        <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(v) => currency(v)} />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div className="bg-white rounded-2xl shadow-card p-5">
+                <h3 className="font-semibold text-slate-800 mb-3">Daily Spending</h3>
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={dailyData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="date" tick={{ fontSize: 12 }} stroke="#94a3b8" />
+                    <YAxis tick={{ fontSize: 12 }} stroke="#94a3b8" />
+                    <Tooltip formatter={(v) => currency(v)} />
+                    <Bar dataKey="amount" fill="#a855f7" radius={[6, 6, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div className="bg-white rounded-2xl shadow-card p-5 lg:col-span-2">
+                <h3 className="font-semibold text-slate-800 mb-3">Monthly Spending Trend</h3>
+                <ResponsiveContainer width="100%" height={260}>
+                  <LineChart data={monthlyData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="#94a3b8" />
+                    <YAxis tick={{ fontSize: 12 }} stroke="#94a3b8" />
+                    <Tooltip formatter={(v) => currency(v)} />
+                    <Line type="monotone" dataKey="amount" stroke="#7c3aed" strokeWidth={2.5} dot={{ r: 4, fill: "#7c3aed" }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === "add" && (
+        <div className="bg-white rounded-2xl shadow-card p-6 max-w-lg">
+          <h3 className="font-semibold text-slate-800 mb-4">Add a new expense</h3>
+          <form onSubmit={handleAddSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Date</label>
+              <input
+                type="date"
+                value={addForm.expense_date}
+                onChange={(e) => setAddForm((f) => ({ ...f, expense_date: e.target.value }))}
+                className="w-full rounded-xl border border-slate-200 px-4 py-2.5 outline-none focus:ring-2 focus:ring-brand-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Amount (₹)</label>
+              <input
+                type="number"
+                min="0"
+                step="10"
+                value={addForm.amount}
+                onChange={(e) => setAddForm((f) => ({ ...f, amount: e.target.value }))}
+                className="w-full rounded-xl border border-slate-200 px-4 py-2.5 outline-none focus:ring-2 focus:ring-brand-500"
+                placeholder="0.00"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Category</label>
+              <select
+                value={addForm.category}
+                onChange={(e) => setAddForm((f) => ({ ...f, category: e.target.value }))}
+                className="w-full rounded-xl border border-slate-200 px-4 py-2.5 outline-none focus:ring-2 focus:ring-brand-500"
+              >
+                {meta.categories.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Description</label>
+              <input
+                type="text"
+                value={addForm.description}
+                onChange={(e) => setAddForm((f) => ({ ...f, description: e.target.value }))}
+                className="w-full rounded-xl border border-slate-200 px-4 py-2.5 outline-none focus:ring-2 focus:ring-brand-500"
+                placeholder="e.g. Grocery, medicine..."
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Payment Method</label>
+              <select
+                value={addForm.payment_method}
+                onChange={(e) => setAddForm((f) => ({ ...f, payment_method: e.target.value }))}
+                className="w-full rounded-xl border border-slate-200 px-4 py-2.5 outline-none focus:ring-2 focus:ring-brand-500"
+              >
+                {meta.payment_methods.map((p) => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+            </div>
+            <button
+              type="submit"
+              disabled={addSubmitting}
+              className="w-full flex items-center justify-center gap-2 rounded-xl bg-brand-gradient text-white font-medium py-2.5 shadow-glow hover:opacity-90 active:scale-[0.99] transition disabled:opacity-60"
+            >
+              <Plus className="w-4 h-4" />
+              {addSubmitting ? "Adding..." : "Add Expense"}
+            </button>
+          </form>
+        </div>
+      )}
+
+      {tab === "history" && (
+        <div>
+          <div className="flex items-end gap-3 mb-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Filter by category</label>
+              <select
+                value={historyCategory}
+                onChange={(e) => setHistoryCategory(e.target.value)}
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+              >
+                <option value="">All Categories</option>
+                {meta.categories.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {!historyFiltered.length ? (
+            <div className="bg-white rounded-2xl shadow-card p-12 text-center text-slate-400">
+              No expenses found.
+            </div>
+          ) : (
+            <>
+              <div className="bg-white rounded-2xl shadow-card overflow-hidden mb-4">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-slate-50 text-slate-500 text-left">
+                        <th className="px-4 py-3 font-medium">Date</th>
+                        <th className="px-4 py-3 font-medium">Amount</th>
+                        <th className="px-4 py-3 font-medium">Category</th>
+                        <th className="px-4 py-3 font-medium">Description</th>
+                        <th className="px-4 py-3 font-medium">Payment Method</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {historyFiltered.map((row) => (
+                        <tr
+                          key={row.id}
+                          onClick={() => selectRow(row)}
+                          className={`border-t border-slate-100 cursor-pointer transition ${
+                            selectedId === row.id ? "bg-brand-50" : "hover:bg-slate-50"
+                          }`}
+                        >
+                          <td className="px-4 py-3 text-slate-700 whitespace-nowrap">{row.expense_date}</td>
+                          <td className="px-4 py-3 text-slate-900 font-medium whitespace-nowrap">{currency(row.amount)}</td>
+                          <td className="px-4 py-3 text-slate-700">{row.category}</td>
+                          <td className="px-4 py-3 text-slate-700">{row.description}</td>
+                          <td className="px-4 py-3 text-slate-700">{row.payment_method}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <button
+                onClick={exportCsv}
+                className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition mb-6"
+              >
+                <Download className="w-4 h-4" />
+                Export filtered expenses as CSV
+              </button>
+
+              {!selectedId ? (
+                <p className="text-sm text-slate-400">👆 Click a row above to edit or delete that transaction — handy if something was added by mistake.</p>
+              ) : (
+                <div className="bg-white rounded-2xl shadow-card p-6 max-w-lg">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-semibold text-slate-800">
+                      Edit or delete: {editForm.description} — {currency(editForm.amount)}
+                    </h3>
+                    <button
+                      onClick={() => { setSelectedId(null); setEditForm(null); }}
+                      className="text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <form onSubmit={handleUpdate} className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1.5">Date</label>
+                      <input
+                        type="date"
+                        value={editForm.expense_date}
+                        onChange={(e) => setEditForm((f) => ({ ...f, expense_date: e.target.value }))}
+                        className="w-full rounded-xl border border-slate-200 px-4 py-2.5 outline-none focus:ring-2 focus:ring-brand-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1.5">Amount (₹)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="10"
+                        value={editForm.amount}
+                        onChange={(e) => setEditForm((f) => ({ ...f, amount: e.target.value }))}
+                        className="w-full rounded-xl border border-slate-200 px-4 py-2.5 outline-none focus:ring-2 focus:ring-brand-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1.5">Category</label>
+                      <select
+                        value={editForm.category}
+                        onChange={(e) => setEditForm((f) => ({ ...f, category: e.target.value }))}
+                        className="w-full rounded-xl border border-slate-200 px-4 py-2.5 outline-none focus:ring-2 focus:ring-brand-500"
+                      >
+                        {meta.categories.map((c) => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1.5">Description</label>
+                      <input
+                        type="text"
+                        value={editForm.description}
+                        onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))}
+                        className="w-full rounded-xl border border-slate-200 px-4 py-2.5 outline-none focus:ring-2 focus:ring-brand-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1.5">Payment Method</label>
+                      <select
+                        value={editForm.payment_method}
+                        onChange={(e) => setEditForm((f) => ({ ...f, payment_method: e.target.value }))}
+                        className="w-full rounded-xl border border-slate-200 px-4 py-2.5 outline-none focus:ring-2 focus:ring-brand-500"
+                      >
+                        {meta.payment_methods.map((p) => (
+                          <option key={p} value={p}>{p}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex gap-3">
+                      <button
+                        type="submit"
+                        className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-brand-gradient text-white font-medium py-2.5 shadow-glow hover:opacity-90 transition"
+                      >
+                        <Save className="w-4 h-4" />
+                        Update
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleDelete}
+                        className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-red-200 text-red-600 font-medium py-2.5 hover:bg-red-50 transition"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Delete
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

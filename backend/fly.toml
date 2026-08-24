@@ -1,0 +1,23 @@
+# Fly.io config. Run `fly launch` in this directory first — it will detect
+# the Dockerfile and can generate/adjust this file for you. Key points to
+# keep: the /data mount (for the persistent SQLite file) and DB_PATH env var.
+
+app = "your-expense-tracker-api"   # change to a unique name
+primary_region = "bom"             # pick the region closest to you
+
+[build]
+
+[env]
+  DB_PATH = "/data/expenses.db"
+
+[mounts]
+  source = "expense_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
