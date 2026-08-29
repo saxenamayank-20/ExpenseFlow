@@ -5,6 +5,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import Layout from "./components/Layout";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import ForgotPassword from "./pages/ForgotPassword";
 import Dashboard from "./pages/Dashboard";
 import Account from "./pages/Account";
 
@@ -18,11 +19,25 @@ export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <Toaster position="top-right" toastOptions={{ duration: 3500 }} />
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            duration: 3500,
+            style: {
+              borderRadius: "12px",
+              background: "#1e293b",
+              color: "#f8fafc",
+              fontSize: "14px",
+              boxShadow: "0 8px 30px -8px rgba(15, 23, 42, 0.35)",
+            },
+            success: { iconTheme: { primary: "#a855f7", secondary: "#f8fafc" } },
+          }}
+        />
         <Routes>
           <Route path="/" element={<RootRedirect />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route
             element={
               <ProtectedRoute>

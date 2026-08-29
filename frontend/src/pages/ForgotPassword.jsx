@@ -1,37 +1,29 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Wallet, Eye, EyeOff, UserPlus, User, UserRound, Lock } from "lucide-react";
+import { Wallet, Eye, EyeOff, User, Lock, KeyRound } from "lucide-react";
 import toast from "react-hot-toast";
-import { useAuth } from "../context/AuthContext";
+import { api } from "../api";
 
-export default function Register() {
-  const { register } = useAuth();
+export default function ForgotPassword() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({
-    full_name: "",
-    username: "",
-    password: "",
-    confirm_password: "",
-  });
-  const [showPassword, setShowPassword] = useState(false);
+  const [username, setUsername] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-
-  const update = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const data = await register(form);
-      if (data.claimed_legacy_expenses) {
-        toast.success(
-          `Welcome! ${data.claimed_legacy_expenses} previously recorded expenses were linked to your new account.`,
-          { duration: 5000 }
-        );
-      } else {
-        toast.success("Account created!");
-      }
-      navigate("/dashboard");
+      await api.forgotPassword({
+        username: username.trim(),
+        new_password: newPassword,
+        confirm_password: confirmPassword,
+      });
+      toast.success("Password reset! You can log in with your new password now.");
+      navigate("/login");
     } catch (err) {
       toast.error(err.message);
     } finally {
@@ -51,12 +43,10 @@ export default function Register() {
             </div>
             <span className="text-2xl font-semibold">ExpenseFlow</span>
           </div>
-          <h1 className="text-4xl font-bold leading-tight mb-4">
-            Your own dashboard, your own data.
-          </h1>
+          <h1 className="text-4xl font-bold leading-tight mb-4">Locked out? Let's fix that.</h1>
           <p className="text-white/80 text-lg">
-            Every account keeps its expenses private and separate. Sign up in seconds and start
-            tracking today.
+            Confirm your username and set a new password — you'll be back into your dashboard in
+            seconds.
           </p>
         </div>
       </div>
@@ -70,23 +60,12 @@ export default function Register() {
             <span className="text-xl font-semibold text-slate-800">ExpenseFlow</span>
           </div>
 
-          <h2 className="text-2xl font-bold text-slate-900 mb-1">Create your account</h2>
-          <p className="text-slate-500 mb-8">Takes less than a minute.</p>
+          <h2 className="text-2xl font-bold text-slate-900 mb-1">Reset your password</h2>
+          <p className="text-slate-500 mb-8">
+            No email on file — just confirm your username and pick a new password.
+          </p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Full name</label>
-              <div className="relative">
-                <UserRound className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input
-                  type="text"
-                  value={form.full_name}
-                  onChange={update("full_name")}
-                  className="w-full rounded-xl border border-slate-200 pl-10 pr-4 py-2.5 text-slate-900 outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition"
-                  placeholder="Jane Doe"
-                />
-              </div>
-            </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Username</label>
               <div className="relative">
@@ -94,48 +73,53 @@ export default function Register() {
                 <input
                   type="text"
                   required
-                  value={form.username}
-                  onChange={update("username")}
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
                   className="w-full rounded-xl border border-slate-200 pl-10 pr-4 py-2.5 text-slate-900 outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition"
-                  placeholder="3-20 characters"
+                  placeholder="yourname"
                 />
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Password</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">New password</label>
               <div className="relative">
                 <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
-                  type={showPassword ? "text" : "password"}
+                  type={showNew ? "text" : "password"}
                   required
-                  value={form.password}
-                  onChange={update("password")}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
                   className="w-full rounded-xl border border-slate-200 pl-10 pr-11 py-2.5 text-slate-900 outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition"
                   placeholder="At least 8 characters"
                 />
                 <button
                   type="button"
-                  onClick={() => setShowPassword((s) => !s)}
+                  onClick={() => setShowNew((s) => !s)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                 >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                Confirm password
-              </label>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Confirm new password</label>
               <div className="relative">
                 <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
-                  type={showPassword ? "text" : "password"}
+                  type={showConfirm ? "text" : "password"}
                   required
-                  value={form.confirm_password}
-                  onChange={update("confirm_password")}
-                  className="w-full rounded-xl border border-slate-200 pl-10 pr-4 py-2.5 text-slate-900 outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition"
-                  placeholder="Repeat password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 pl-10 pr-11 py-2.5 text-slate-900 outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition"
+                  placeholder="Repeat new password"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirm((s) => !s)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
             </div>
 
@@ -144,15 +128,15 @@ export default function Register() {
               disabled={submitting}
               className="w-full flex items-center justify-center gap-2 rounded-xl bg-brand-gradient text-white font-medium py-2.5 shadow-glow hover:opacity-90 active:scale-[0.99] transition disabled:opacity-60"
             >
-              <UserPlus className="w-4 h-4" />
-              {submitting ? "Creating account..." : "Register"}
+              <KeyRound className="w-4 h-4" />
+              {submitting ? "Resetting..." : "Reset password"}
             </button>
           </form>
 
           <p className="text-sm text-slate-500 mt-6 text-center">
-            Already have an account?{" "}
+            Remembered it after all?{" "}
             <Link to="/login" className="text-brand-600 font-medium hover:underline">
-              Log in
+              Back to log in
             </Link>
           </p>
         </div>

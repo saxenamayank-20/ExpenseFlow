@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Wallet, Eye, EyeOff, LogIn } from "lucide-react";
+import { Wallet, Eye, EyeOff, LogIn, User, Lock } from "lucide-react";
 import toast from "react-hot-toast";
 import { useAuth } from "../context/AuthContext";
 
@@ -63,24 +63,33 @@ export default function Login() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Username</label>
-              <input
-                type="text"
-                required
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-slate-900 outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition"
-                placeholder="yourname"
-              />
+              <div className="relative">
+                <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  required
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 pl-10 pr-4 py-2.5 text-slate-900 outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition"
+                  placeholder="yourname"
+                />
+              </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Password</label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-sm font-medium text-slate-700">Password</label>
+                <Link to="/forgot-password" className="text-xs font-medium text-brand-600 hover:underline">
+                  Forgot password?
+                </Link>
+              </div>
               <div className="relative">
+                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
                   type={showPassword ? "text" : "password"}
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 px-4 py-2.5 pr-11 text-slate-900 outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition"
+                  className="w-full rounded-xl border border-slate-200 pl-10 pr-11 py-2.5 text-slate-900 outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition"
                   placeholder="••••••••"
                 />
                 <button

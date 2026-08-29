@@ -38,12 +38,14 @@ def init_db():
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
                 username TEXT NOT NULL UNIQUE,
-                email TEXT NOT NULL UNIQUE,
                 full_name TEXT,
                 password_hash TEXT NOT NULL,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT now()
             )
         """)
+        # Drops the email column left over from earlier deployments -- the
+        # account model no longer collects or stores email addresses.
+        cur.execute("ALTER TABLE users DROP COLUMN IF EXISTS email")
 
         cur.execute("""
             SELECT column_name AS name FROM information_schema.columns
@@ -84,14 +86,6 @@ def get_user_by_username(username):
     return dict(row) if row else None
 
 
-def get_user_by_email(email):
-    with get_conn() as conn:
-        cur = conn.cursor()
-        cur.execute("SELECT * FROM users WHERE email = %s", (email,))
-        row = cur.fetchone()
-    return dict(row) if row else None
-
-
 def get_user_by_id(user_id):
     with get_conn() as conn:
         cur = conn.cursor()
@@ -100,14 +94,14 @@ def get_user_by_id(user_id):
     return dict(row) if row else None
 
 
-def create_user(username, email, full_name, password_hash):
+def create_user(username, full_name, password_hash):
     with get_conn() as conn:
         cur = conn.cursor()
         cur.execute("""
-            INSERT INTO users (username, email, full_name, password_hash)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO users (username, full_name, password_hash)
+            VALUES (%s, %s, %s)
             RETURNING id
-        """, (username, email, full_name, password_hash))
+        """, (username, full_name, password_hash))
         return cur.fetchone()["id"]
 
 

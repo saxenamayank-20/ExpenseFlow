@@ -1,6 +1,6 @@
 export default function StatCard({ icon: Icon, label, value, accent }) {
   return (
-    <div className="bg-white rounded-2xl shadow-card p-5 flex items-center gap-4">
+    <div className="bg-white rounded-2xl shadow-card p-5 flex items-center gap-4 transition hover:-translate-y-0.5 hover:shadow-lg">
       <div
         className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
         style={{ background: accent?.bg || "#f5f3ff" }}

@@ -64,7 +64,6 @@ def user_public(user, token=None):
     data = {
         "id": user["id"],
         "username": user["username"],
-        "email": user["email"],
         "full_name": user["full_name"],
         "created_at": user["created_at"],
     }
@@ -76,7 +75,6 @@ def user_public(user, token=None):
 class RegisterRequest(BaseModel):
     full_name: str = ""
     username: str
-    email: str
     password: str
     confirm_password: str
 
@@ -84,6 +82,12 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    username: str
+    new_password: str
+    confirm_password: str
 
 
 class ExpenseIn(BaseModel):
@@ -108,21 +112,18 @@ def meta():
 @app.post("/api/auth/register")
 def register(payload: RegisterRequest):
     username = payload.username.strip()
-    email = payload.email.strip()
     full_name = payload.full_name.strip()
 
-    errors = auth.validate_registration(username, email, payload.password, payload.confirm_password)
+    errors = auth.validate_registration(username, payload.password, payload.confirm_password)
     if not errors:
         if db.get_user_by_username(username):
             errors.append("That username is already taken.")
-        if db.get_user_by_email(email):
-            errors.append("An account with that email already exists.")
     if errors:
         raise HTTPException(status_code=400, detail=errors[0])
 
     is_first_user = db.count_users() == 0
     password_hash = auth.hash_password(payload.password)
-    user_id = db.create_user(username, email, full_name, password_hash)
+    user_id = db.create_user(username, full_name, password_hash)
 
     claimed = 0
     if is_first_user and db.has_legacy_expenses():
@@ -142,6 +143,19 @@ def login(payload: LoginRequest):
         raise HTTPException(status_code=401, detail="Invalid username or password.")
     token = auth.create_access_token(user["id"], SECRET_KEY)
     return user_public(user, token)
+
+
+@app.post("/api/auth/forgot-password")
+def forgot_password(payload: ForgotPasswordRequest):
+    user = db.get_user_by_username(payload.username.strip())
+    if not user:
+        raise HTTPException(status_code=404, detail="No account found with that username.")
+    if len(payload.new_password) < 8:
+        raise HTTPException(status_code=400, detail="New password must be at least 8 characters.")
+    if payload.new_password != payload.confirm_password:
+        raise HTTPException(status_code=400, detail="Passwords do not match.")
+    db.update_password(user["id"], auth.hash_password(payload.new_password))
+    return {"success": True}
 
 
 @app.get("/api/auth/me")

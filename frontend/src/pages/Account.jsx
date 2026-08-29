@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { UserRound, Mail, Calendar, Receipt, Wallet, Layers, KeyRound } from "lucide-react";
+import { UserRound, Calendar, Receipt, Wallet, Layers, KeyRound, Eye, EyeOff } from "lucide-react";
 import toast from "react-hot-toast";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../api";
@@ -14,6 +14,9 @@ export default function Account() {
   const [stats, setStats] = useState(null);
   const [pwForm, setPwForm] = useState({ current_password: "", new_password: "", confirm_password: "" });
   const [submitting, setSubmitting] = useState(false);
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   useEffect(() => {
     api.accountStats(token).then(setStats).catch((err) => toast.error(err.message));
@@ -55,10 +58,6 @@ export default function Account() {
             <p className="text-sm text-slate-400">@{user?.username}</p>
           </div>
           <div className="space-y-3 text-sm">
-            <div className="flex items-center gap-2.5 text-slate-600">
-              <Mail className="w-4 h-4 text-slate-400" />
-              {user?.email}
-            </div>
             {user?.created_at && (
               <div className="flex items-center gap-2.5 text-slate-600">
                 <Calendar className="w-4 h-4 text-slate-400" />
@@ -98,34 +97,61 @@ export default function Account() {
         <form onSubmit={handlePasswordChange} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Current password</label>
-            <input
-              type="password"
-              required
-              value={pwForm.current_password}
-              onChange={(e) => setPwForm((f) => ({ ...f, current_password: e.target.value }))}
-              className="w-full rounded-xl border border-slate-200 px-4 py-2.5 outline-none focus:ring-2 focus:ring-brand-500"
-            />
+            <div className="relative">
+              <input
+                type={showCurrent ? "text" : "password"}
+                required
+                value={pwForm.current_password}
+                onChange={(e) => setPwForm((f) => ({ ...f, current_password: e.target.value }))}
+                className="w-full rounded-xl border border-slate-200 px-4 py-2.5 pr-11 outline-none focus:ring-2 focus:ring-brand-500"
+              />
+              <button
+                type="button"
+                onClick={() => setShowCurrent((s) => !s)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              >
+                {showCurrent ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">New password</label>
-            <input
-              type="password"
-              required
-              value={pwForm.new_password}
-              onChange={(e) => setPwForm((f) => ({ ...f, new_password: e.target.value }))}
-              className="w-full rounded-xl border border-slate-200 px-4 py-2.5 outline-none focus:ring-2 focus:ring-brand-500"
-              placeholder="At least 8 characters"
-            />
+            <div className="relative">
+              <input
+                type={showNew ? "text" : "password"}
+                required
+                value={pwForm.new_password}
+                onChange={(e) => setPwForm((f) => ({ ...f, new_password: e.target.value }))}
+                className="w-full rounded-xl border border-slate-200 px-4 py-2.5 pr-11 outline-none focus:ring-2 focus:ring-brand-500"
+                placeholder="At least 8 characters"
+              />
+              <button
+                type="button"
+                onClick={() => setShowNew((s) => !s)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              >
+                {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Confirm new password</label>
-            <input
-              type="password"
-              required
-              value={pwForm.confirm_password}
-              onChange={(e) => setPwForm((f) => ({ ...f, confirm_password: e.target.value }))}
-              className="w-full rounded-xl border border-slate-200 px-4 py-2.5 outline-none focus:ring-2 focus:ring-brand-500"
-            />
+            <div className="relative">
+              <input
+                type={showConfirm ? "text" : "password"}
+                required
+                value={pwForm.confirm_password}
+                onChange={(e) => setPwForm((f) => ({ ...f, confirm_password: e.target.value }))}
+                className="w-full rounded-xl border border-slate-200 px-4 py-2.5 pr-11 outline-none focus:ring-2 focus:ring-brand-500"
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirm((s) => !s)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              >
+                {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
           <button
             type="submit"

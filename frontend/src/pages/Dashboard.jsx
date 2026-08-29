@@ -29,6 +29,8 @@ import toast from "react-hot-toast";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../api";
 import StatCard from "../components/StatCard";
+import DatePicker from "../components/DatePicker";
+import DateRangePicker from "../components/DateRangePicker";
 
 const PIE_COLORS = ["#7c3aed", "#a855f7", "#ec4899", "#f472b6", "#c084fc", "#f97316", "#22c55e", "#3b82f6", "#94a3b8"];
 
@@ -95,6 +97,15 @@ export default function Dashboard() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const dataMinDate = useMemo(
+    () => (expenses.length ? expenses.map((e) => e.expense_date).sort()[0] : null),
+    [expenses]
+  );
+  const dataMaxDate = useMemo(
+    () => (expenses.length ? expenses.map((e) => e.expense_date).sort().slice(-1)[0] : null),
+    [expenses]
+  );
 
   const dateFiltered = useMemo(() => {
     return expenses.filter((e) => {
@@ -245,25 +256,18 @@ export default function Dashboard() {
       </div>
       <p className="text-slate-500 mb-6 ml-[3.25rem]">Track, filter, and understand your spending.</p>
 
-      <div className="flex flex-wrap items-end gap-3 bg-white rounded-2xl shadow-card p-4 mb-6">
-        <div>
-          <label className="block text-xs font-medium text-slate-500 mb-1">From</label>
-          <input
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-brand-500"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-slate-500 mb-1">To</label>
-          <input
-            type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-brand-500"
-          />
-        </div>
+      <div className="flex flex-wrap items-center gap-3 bg-white rounded-2xl shadow-card p-4 mb-6">
+        <span className="text-xs font-medium text-slate-500">Showing expenses for</span>
+        <DateRangePicker
+          startDate={startDate}
+          endDate={endDate}
+          onChange={(s, e) => {
+            setStartDate(s);
+            setEndDate(e);
+          }}
+          minDate={dataMinDate}
+          maxDate={dataMaxDate}
+        />
       </div>
 
       <div className="flex gap-1 mb-6 bg-white rounded-xl shadow-card p-1 w-fit">
@@ -346,11 +350,9 @@ export default function Dashboard() {
           <form onSubmit={handleAddSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Date</label>
-              <input
-                type="date"
+              <DatePicker
                 value={addForm.expense_date}
-                onChange={(e) => setAddForm((f) => ({ ...f, expense_date: e.target.value }))}
-                className="w-full rounded-xl border border-slate-200 px-4 py-2.5 outline-none focus:ring-2 focus:ring-brand-500"
+                onChange={(v) => setAddForm((f) => ({ ...f, expense_date: v }))}
               />
             </div>
             <div>
@@ -494,11 +496,9 @@ export default function Dashboard() {
                   <form onSubmit={handleUpdate} className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1.5">Date</label>
-                      <input
-                        type="date"
+                      <DatePicker
                         value={editForm.expense_date}
-                        onChange={(e) => setEditForm((f) => ({ ...f, expense_date: e.target.value }))}
-                        className="w-full rounded-xl border border-slate-200 px-4 py-2.5 outline-none focus:ring-2 focus:ring-brand-500"
+                        onChange={(v) => setEditForm((f) => ({ ...f, expense_date: v }))}
                       />
                     </div>
                     <div>
