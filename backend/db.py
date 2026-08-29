@@ -1,15 +1,31 @@
 import os
-import sqlite3
-from pathlib import Path
+from contextlib import contextmanager
 
-DB_PATH = Path(os.environ.get("DB_PATH") or (Path(__file__).resolve().parent.parent / "expenses.db"))
+import psycopg2
+import psycopg2.extras
+from dotenv import load_dotenv
+
+load_dotenv()
+
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError(
+        "DATABASE_URL is not set. Point it at your Neon Postgres connection string "
+        "(see backend/.env.example)."
+    )
 
 
+@contextmanager
 def get_conn():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    return conn
+    conn = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def init_db():
@@ -17,117 +33,127 @@ def init_db():
     (no user_id column) out of the way so its data can be claimed by
     the first registered account."""
     with get_conn() as conn:
-        conn.execute("""
+        cur = conn.cursor()
+        cur.execute("""
             CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 username TEXT NOT NULL UNIQUE,
                 email TEXT NOT NULL UNIQUE,
                 full_name TEXT,
                 password_hash TEXT NOT NULL,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMPTZ NOT NULL DEFAULT now()
             )
         """)
 
-        existing_cols = [
-            r["name"] for r in conn.execute("PRAGMA table_info(expenses)").fetchall()
-        ]
+        cur.execute("""
+            SELECT column_name AS name FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'expenses'
+        """)
+        existing_cols = [r["name"] for r in cur.fetchall()]
         if existing_cols and "user_id" not in existing_cols:
-            conn.execute("ALTER TABLE expenses RENAME TO expenses_legacy")
+            cur.execute("ALTER TABLE expenses RENAME TO expenses_legacy")
 
-        conn.execute("""
+        cur.execute("""
             CREATE TABLE IF NOT EXISTS expenses (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
                 expense_date TEXT NOT NULL,
                 amount REAL NOT NULL,
                 category TEXT NOT NULL,
                 description TEXT,
                 payment_method TEXT,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                created_at TIMESTAMPTZ NOT NULL DEFAULT now()
             )
         """)
-        conn.commit()
 
 
 # ---------- users ----------
 
 def count_users():
     with get_conn() as conn:
-        return conn.execute("SELECT COUNT(*) AS c FROM users").fetchone()["c"]
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) AS c FROM users")
+        return cur.fetchone()["c"]
 
 
 def get_user_by_username(username):
     with get_conn() as conn:
-        row = conn.execute(
-            "SELECT * FROM users WHERE username = ?", (username,)
-        ).fetchone()
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM users WHERE username = %s", (username,))
+        row = cur.fetchone()
     return dict(row) if row else None
 
 
 def get_user_by_email(email):
     with get_conn() as conn:
-        row = conn.execute(
-            "SELECT * FROM users WHERE email = ?", (email,)
-        ).fetchone()
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM users WHERE email = %s", (email,))
+        row = cur.fetchone()
     return dict(row) if row else None
 
 
 def get_user_by_id(user_id):
     with get_conn() as conn:
-        row = conn.execute(
-            "SELECT * FROM users WHERE id = ?", (user_id,)
-        ).fetchone()
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+        row = cur.fetchone()
     return dict(row) if row else None
 
 
 def create_user(username, email, full_name, password_hash):
     with get_conn() as conn:
-        cur = conn.execute("""
+        cur = conn.cursor()
+        cur.execute("""
             INSERT INTO users (username, email, full_name, password_hash)
-            VALUES (?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s)
+            RETURNING id
         """, (username, email, full_name, password_hash))
-        conn.commit()
-        return cur.lastrowid
+        return cur.fetchone()["id"]
 
 
 def update_password(user_id, password_hash):
     with get_conn() as conn:
-        conn.execute(
-            "UPDATE users SET password_hash = ? WHERE id = ?",
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE users SET password_hash = %s WHERE id = %s",
             (password_hash, user_id),
         )
-        conn.commit()
 
 
 def has_legacy_expenses():
     with get_conn() as conn:
-        row = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='expenses_legacy'"
-        ).fetchone()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT table_name FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = 'expenses_legacy'
+        """)
+        row = cur.fetchone()
     return row is not None
 
 
 def claim_legacy_expenses(user_id):
     """Assign pre-auth demo/seed expenses to the first account that registers."""
     with get_conn() as conn:
-        row = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='expenses_legacy'"
-        ).fetchone()
-        if not row:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT table_name FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = 'expenses_legacy'
+        """)
+        if not cur.fetchone():
             return 0
-        rows = conn.execute(
-            "SELECT expense_date, amount, category, description, payment_method FROM expenses_legacy"
-        ).fetchall()
-        conn.executemany("""
+        cur.execute("""
+            SELECT expense_date, amount, category, description, payment_method
+            FROM expenses_legacy
+        """)
+        rows = cur.fetchall()
+        cur.executemany("""
             INSERT INTO expenses (user_id, expense_date, amount, category, description, payment_method)
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s)
         """, [
             (user_id, r["expense_date"], r["amount"], r["category"], r["description"], r["payment_method"])
             for r in rows
         ])
-        conn.execute("DROP TABLE expenses_legacy")
-        conn.commit()
+        cur.execute("DROP TABLE expenses_legacy")
         return len(rows)
 
 
@@ -135,38 +161,40 @@ def claim_legacy_expenses(user_id):
 
 def add_expense(user_id, expense_date, amount, category, description, payment_method):
     with get_conn() as conn:
-        conn.execute("""
+        cur = conn.cursor()
+        cur.execute("""
             INSERT INTO expenses
             (user_id, expense_date, amount, category, description, payment_method)
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s)
         """, (user_id, str(expense_date), float(amount), category, description, payment_method))
-        conn.commit()
 
 
 def get_expenses(user_id):
     with get_conn() as conn:
-        rows = conn.execute("""
+        cur = conn.cursor()
+        cur.execute("""
             SELECT id, expense_date, amount, category, description, payment_method
             FROM expenses
-            WHERE user_id = ?
+            WHERE user_id = %s
             ORDER BY expense_date DESC, id DESC
-        """, (user_id,)).fetchall()
+        """, (user_id,))
+        rows = cur.fetchall()
     return [dict(r) for r in rows]
 
 
 def delete_expense(user_id, expense_id):
     with get_conn() as conn:
-        conn.execute(
-            "DELETE FROM expenses WHERE id = ? AND user_id = ?", (expense_id, user_id)
+        cur = conn.cursor()
+        cur.execute(
+            "DELETE FROM expenses WHERE id = %s AND user_id = %s", (expense_id, user_id)
         )
-        conn.commit()
 
 
 def update_expense(user_id, expense_id, expense_date, amount, category, description, payment_method):
     with get_conn() as conn:
-        conn.execute("""
+        cur = conn.cursor()
+        cur.execute("""
             UPDATE expenses
-            SET expense_date=?, amount=?, category=?, description=?, payment_method=?
-            WHERE id=? AND user_id=?
+            SET expense_date=%s, amount=%s, category=%s, description=%s, payment_method=%s
+            WHERE id=%s AND user_id=%s
         """, (str(expense_date), float(amount), category, description, payment_method, expense_id, user_id))
-        conn.commit()

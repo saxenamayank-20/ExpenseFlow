@@ -5,6 +5,7 @@ venv/
 expenses.db
 .streamlit/
 backend/.secret_key
+backend/.env
 frontend/node_modules/
 frontend/dist/
 frontend/.env
