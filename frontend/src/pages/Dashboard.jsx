@@ -203,10 +203,10 @@ export default function Dashboard() {
     });
     return Object.entries(map)
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, amount]) => ({
-        date: date.slice(5),
-        amount,
-      }));
+      .map(([date, amount]) => {
+        const [, month, day] = date.split("-");
+        return { date: `${day}-${Number(month)}`, amount };
+      });
   }, [dateFiltered]);
 
   const monthlyData = useMemo(() => {
@@ -484,7 +484,11 @@ export default function Dashboard() {
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartGridColor} />
                     <XAxis dataKey="date" tick={{ fontSize: 12, fill: chartAxisColor }} stroke={chartAxisColor} />
                     <YAxis tick={{ fontSize: 12, fill: chartAxisColor }} stroke={chartAxisColor} />
-                    <Tooltip formatter={(v) => currency(v)} {...tooltipStyle} />
+                    <Tooltip
+                      formatter={(v) => currency(v)}
+                      cursor={{ fill: isDark ? "rgba(168,85,247,0.12)" : "rgba(168,85,247,0.08)" }}
+                      {...tooltipStyle}
+                    />
                     <Bar dataKey="amount" fill="#a855f7" radius={[6, 6, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
