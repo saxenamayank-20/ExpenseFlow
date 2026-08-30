@@ -34,4 +34,5 @@ export const api = {
     request(`/api/expenses/${id}`, { method: "PUT", body: payload, token }),
   deleteExpense: (id, token) => request(`/api/expenses/${id}`, { method: "DELETE", token }),
   accountStats: (token) => request("/api/account/stats", { token }),
+  deleteAccount: (payload, token) => request("/api/account", { method: "DELETE", body: payload, token }),
 };

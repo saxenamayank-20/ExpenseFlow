@@ -26,17 +26,17 @@ export default function Calendar({
         <button
           type="button"
           onClick={() => onViewDateChange(new Date(year, month - 1, 1))}
-          className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition"
+          className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:hover:bg-slate-800 dark:hover:text-slate-100 transition"
         >
           <ChevronLeft className="w-4 h-4" />
         </button>
-        <span className="text-sm font-semibold text-slate-800">
+        <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">
           {MONTH_NAMES[month]} {year}
         </span>
         <button
           type="button"
           onClick={() => onViewDateChange(new Date(year, month + 1, 1))}
-          className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition"
+          className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:hover:bg-slate-800 dark:hover:text-slate-100 transition"
         >
           <ChevronRight className="w-4 h-4" />
         </button>
@@ -65,11 +65,11 @@ export default function Calendar({
                 onClick={() => onSelectDay(d)}
                 className={[
                   "w-8 h-8 rounded-lg text-sm flex items-center justify-center transition",
-                  outside ? "text-slate-300" : "text-slate-700",
-                  isInRange && !isRangeEdge ? "bg-brand-100 text-brand-700 rounded-none" : "",
+                  outside ? "text-slate-300 dark:text-slate-700" : "text-slate-700 dark:text-slate-300",
+                  isInRange && !isRangeEdge ? "bg-brand-100 text-brand-700 dark:bg-brand-900/50 dark:text-brand-300 rounded-none" : "",
                   isRangeEdge ? "bg-brand-gradient text-white font-semibold shadow-glow" : "",
                   isSelected && !isRangeEdge ? "bg-brand-gradient text-white font-semibold shadow-glow" : "",
-                  !isSelected && !isRangeEdge && !isInRange ? "hover:bg-slate-100" : "",
+                  !isSelected && !isRangeEdge && !isInRange ? "hover:bg-slate-100 dark:hover:bg-slate-800" : "",
                   isToday && !isSelected && !isRangeEdge ? "ring-1 ring-inset ring-brand-400" : "",
                 ].join(" ")}
               >

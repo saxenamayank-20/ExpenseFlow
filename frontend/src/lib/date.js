@@ -42,9 +42,14 @@ export function startOfMonth(date) {
   return new Date(date.getFullYear(), date.getMonth(), 1);
 }
 
+// Monday-start week (matches the en-IN locale used elsewhere in the app).
+// A Sunday-start week degenerates to a 1-day range whenever "today" is a
+// Sunday, since start-of-week and today would be the same date.
 export function startOfWeek(date) {
   const d = new Date(date);
-  d.setDate(d.getDate() - d.getDay());
+  const day = d.getDay();
+  const diffFromMonday = day === 0 ? 6 : day - 1;
+  d.setDate(d.getDate() - diffFromMonday);
   return d;
 }
 

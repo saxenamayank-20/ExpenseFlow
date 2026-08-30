@@ -4,11 +4,14 @@ A multi-user personal expense tracker with a FastAPI backend and a React + Tailw
 
 ## Features
 
-- **Accounts**: register, log in, log out — passwords stored as bcrypt hashes, sessions via JWT
+- **Accounts**: register with just a username and password (no email required), log in, forgot-password self-recovery, log out — passwords stored as bcrypt hashes, sessions via JWT
 - **Per-user data isolation**: every account only ever sees and edits its own expenses
-- **Dashboard**: add expenses, spending-by-category / daily / monthly trend charts, date-range filter, editable history table, CSV export
-- **History & Manage**: its own category filter, independent of the Overview tab, plus click-a-row edit/delete for fixing mistaken entries
-- **My Account**: profile details, activity stats, change password
+- **Dashboard Overview**: custom calendar date-range picker with quick presets (Today, This Week, This Month, Last 30 Days, This Year, All Time), auto-generated **Smart Insights** (top category, biggest expense, month-over-month change), spending-by-category / daily / monthly trend charts
+- **Add Expense**: a custom date picker and defaults that follow your saved preferences
+- **History & Manage**: its own search box and category filter, independent of the Overview date range, sortable columns, CSV export, and click-a-row edit/delete for fixing mistaken entries
+- **My Account**: Account Details, Expense Details, Change Password (with show/hide on every field), **Preferences** (dark mode, default category/payment method), and a **Danger Zone** for permanent account deletion
+- **Dark mode** across the entire app, remembered per device
+- A public landing page at `/` for signed-out visitors, with the full app behind auth
 - A glamorous, gradient-driven UI built with React, React Router, Tailwind CSS, and Recharts
 
 ## Architecture
@@ -18,7 +21,7 @@ backend/     FastAPI REST API (Python) — auth, expenses, account stats
 frontend/    React + Vite + Tailwind CSS single-page app
 ```
 
-The frontend talks to the backend over HTTP; the backend serves JSON only (no HTML). Data lives in a **Postgres database on Neon** (see below) — not in a local file.
+The frontend talks to the backend over HTTP; the backend serves JSON only (no HTML). Data lives in a **Postgres database on Neon** (see below) — not in a local file. The backend keeps a small pooled connection to Neon (rather than opening a fresh one per query), which meaningfully cuts down response time.
 
 ## Run locally
 

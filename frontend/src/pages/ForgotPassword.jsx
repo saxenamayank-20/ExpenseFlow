@@ -32,7 +32,7 @@ export default function ForgotPassword() {
   };
 
   return (
-    <div className="min-h-screen flex bg-slate-50">
+    <div className="min-h-screen flex bg-slate-50 dark:bg-slate-950">
       <div className="hidden lg:flex lg:w-1/2 bg-brand-gradient relative overflow-hidden items-center justify-center p-12">
         <div className="absolute -top-24 -left-24 w-96 h-96 rounded-full bg-white/10 blur-3xl" />
         <div className="absolute bottom-0 right-0 w-80 h-80 rounded-full bg-white/10 blur-3xl" />
@@ -57,17 +57,17 @@ export default function ForgotPassword() {
             <div className="w-10 h-10 rounded-xl bg-brand-gradient flex items-center justify-center">
               <Wallet className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-semibold text-slate-800">ExpenseFlow</span>
+            <span className="text-xl font-semibold text-slate-800 dark:text-slate-100">ExpenseFlow</span>
           </div>
 
-          <h2 className="text-2xl font-bold text-slate-900 mb-1">Reset your password</h2>
-          <p className="text-slate-500 mb-8">
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-1">Reset your password</h2>
+          <p className="text-slate-500 dark:text-slate-400 mb-8">
             No email on file — just confirm your username and pick a new password.
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Username</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Username</label>
               <div className="relative">
                 <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
@@ -75,13 +75,13 @@ export default function ForgotPassword() {
                   required
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 pl-10 pr-4 py-2.5 text-slate-900 outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 pl-10 pr-4 py-2.5 text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition"
                   placeholder="yourname"
                 />
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">New password</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">New password</label>
               <div className="relative">
                 <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
@@ -89,20 +89,20 @@ export default function ForgotPassword() {
                   required
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 pl-10 pr-11 py-2.5 text-slate-900 outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 pl-10 pr-11 py-2.5 text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition"
                   placeholder="At least 8 characters"
                 />
                 <button
                   type="button"
                   onClick={() => setShowNew((s) => !s)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
                 >
                   {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Confirm new password</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Confirm new password</label>
               <div className="relative">
                 <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
@@ -110,13 +110,13 @@ export default function ForgotPassword() {
                   required
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 pl-10 pr-11 py-2.5 text-slate-900 outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 pl-10 pr-11 py-2.5 text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition"
                   placeholder="Repeat new password"
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirm((s) => !s)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
                 >
                   {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -133,7 +133,7 @@ export default function ForgotPassword() {
             </button>
           </form>
 
-          <p className="text-sm text-slate-500 mt-6 text-center">
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-6 text-center">
             Remembered it after all?{" "}
             <Link to="/login" className="text-brand-600 font-medium hover:underline">
               Back to log in

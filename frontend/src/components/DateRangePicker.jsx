@@ -74,7 +74,7 @@ export default function DateRangePicker({ startDate, endDate, onChange, minDate,
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 hover:border-slate-300 transition"
+        className="flex items-center gap-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-600 transition"
       >
         <CalendarRange className="w-4 h-4 text-brand-500 shrink-0" />
         <span className="font-medium">
@@ -83,15 +83,15 @@ export default function DateRangePicker({ startDate, endDate, onChange, minDate,
       </button>
 
       {open && (
-        <div className="absolute z-20 mt-2 bg-white rounded-2xl shadow-card border border-slate-100 flex overflow-hidden">
-          <div className="w-40 border-r border-slate-100 p-2 flex flex-col gap-0.5">
+        <div className="absolute z-20 mt-2 bg-white dark:bg-slate-900 rounded-2xl shadow-card border border-slate-100 dark:border-slate-700 flex overflow-hidden">
+          <div className="w-40 border-r border-slate-100 dark:border-slate-700 p-2 flex flex-col gap-0.5">
             {presets.map((p) => (
               <button
                 key={p.label}
                 type="button"
                 disabled={p.disabled}
                 onClick={() => applyRange(...p.get())}
-                className="text-left px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-brand-50 hover:text-brand-700 transition disabled:opacity-40 disabled:pointer-events-none"
+                className="text-left px-3 py-2 rounded-lg text-sm text-slate-600 dark:text-slate-300 hover:bg-brand-50 hover:text-brand-700 dark:hover:bg-brand-900/40 dark:hover:text-brand-300 transition disabled:opacity-40 disabled:pointer-events-none"
               >
                 {p.label}
               </button>

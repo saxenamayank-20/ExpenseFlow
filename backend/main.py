@@ -104,6 +104,10 @@ class PasswordChangeRequest(BaseModel):
     confirm_password: str
 
 
+class DeleteAccountRequest(BaseModel):
+    current_password: str
+
+
 @app.get("/api/meta")
 def meta():
     return {"categories": CATEGORIES, "payment_methods": PAYMENT_METHODS}
@@ -221,3 +225,12 @@ def account_stats(current_user=Depends(get_current_user)):
         "total_spent": total_spent,
         "categories_used": categories_used,
     }
+
+
+@app.delete("/api/account")
+def delete_account(payload: DeleteAccountRequest, current_user=Depends(get_current_user)):
+    fresh = db.get_user_by_id(current_user["id"])
+    if not auth.verify_password(payload.current_password, fresh["password_hash"]):
+        raise HTTPException(status_code=400, detail="Current password is incorrect.")
+    db.delete_user(current_user["id"])
+    return {"success": True}

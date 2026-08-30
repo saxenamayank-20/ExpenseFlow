@@ -3,6 +3,7 @@ from contextlib import contextmanager
 
 import psycopg2
 import psycopg2.extras
+import psycopg2.pool
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -14,10 +15,18 @@ if not DATABASE_URL:
         "(see backend/.env.example)."
     )
 
+# A pooled connection is reused across requests instead of opening a fresh
+# TCP+TLS handshake to Neon on every single query -- that handshake alone
+# was taking several seconds, so a request touching multiple tables (e.g.
+# register) was compounding it into double-digit-second responses.
+_pool = psycopg2.pool.ThreadedConnectionPool(
+    1, 10, DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor
+)
+
 
 @contextmanager
 def get_conn():
-    conn = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+    conn = _pool.getconn()
     try:
         yield conn
         conn.commit()
@@ -25,7 +34,7 @@ def get_conn():
         conn.rollback()
         raise
     finally:
-        conn.close()
+        _pool.putconn(conn)
 
 
 def init_db():
@@ -112,6 +121,13 @@ def update_password(user_id, password_hash):
             "UPDATE users SET password_hash = %s WHERE id = %s",
             (password_hash, user_id),
         )
+
+
+def delete_user(user_id):
+    # Expenses cascade via the users(id) ON DELETE CASCADE foreign key.
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM users WHERE id = %s", (user_id,))
 
 
 def has_legacy_expenses():

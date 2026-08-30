@@ -36,7 +36,7 @@ export default function DatePicker({ value, onChange, className = "" }) {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center gap-2.5 rounded-xl border border-slate-200 px-4 py-2.5 text-left text-slate-900 bg-white outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition hover:border-slate-300"
+        className="w-full flex items-center gap-2.5 rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-2.5 text-left text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-900 outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition hover:border-slate-300 dark:hover:border-slate-600"
       >
         <CalendarDays className="w-4 h-4 text-slate-400 shrink-0" />
         <span className={value ? "" : "text-slate-400"}>
@@ -45,7 +45,7 @@ export default function DatePicker({ value, onChange, className = "" }) {
       </button>
 
       {open && (
-        <div className="absolute z-20 mt-2 bg-white rounded-2xl shadow-card border border-slate-100 p-4">
+        <div className="absolute z-20 mt-2 bg-white dark:bg-slate-900 rounded-2xl shadow-card border border-slate-100 dark:border-slate-700 p-4">
           <Calendar
             viewDate={viewDate}
             onViewDateChange={setViewDate}
