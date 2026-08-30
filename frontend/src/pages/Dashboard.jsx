@@ -523,7 +523,7 @@ export default function Dashboard() {
               <input
                 type="number"
                 min="0"
-                step="10"
+                step="0.01"
                 value={addForm.amount}
                 onChange={(e) => setAddForm((f) => ({ ...f, amount: e.target.value }))}
                 className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-4 py-2.5 outline-none focus:ring-2 focus:ring-brand-500"
@@ -692,7 +692,7 @@ export default function Dashboard() {
                       <input
                         type="number"
                         min="0"
-                        step="10"
+                        step="0.01"
                         value={editForm.amount}
                         onChange={(e) => setEditForm((f) => ({ ...f, amount: e.target.value }))}
                         className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-4 py-2.5 outline-none focus:ring-2 focus:ring-brand-500"
