@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   ResponsiveContainer,
   PieChart,
@@ -31,6 +32,7 @@ import {
   ArrowUpDown,
   Trophy,
   Zap,
+  Banknote,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useAuth } from "../context/AuthContext";
@@ -40,6 +42,7 @@ import { getPrefs } from "../lib/prefs";
 import StatCard from "../components/StatCard";
 import DatePicker from "../components/DatePicker";
 import DateRangePicker from "../components/DateRangePicker";
+import SalaryBar from "../components/SalaryBar";
 
 const PIE_COLORS = ["#7c3aed", "#a855f7", "#ec4899", "#f472b6", "#c084fc", "#f97316", "#22c55e", "#3b82f6", "#94a3b8"];
 
@@ -55,6 +58,7 @@ const HISTORY_COLUMNS = [
   { key: "category", label: "Category" },
   { key: "description", label: "Description" },
   { key: "payment_method", label: "Payment Method" },
+  { key: "salary_label", label: "Salary" },
 ];
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -75,6 +79,7 @@ export default function Dashboard() {
   const isDark = theme === "dark";
   const [meta, setMeta] = useState({ categories: [], payment_methods: [] });
   const [expenses, setExpenses] = useState([]);
+  const [salaries, setSalaries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("overview");
 
@@ -107,10 +112,17 @@ export default function Dashboard() {
     }
   };
 
+  const loadSalaries = async () => {
+    setSalaries(await api.listSalaries(token));
+  };
+
+  // reload both, the salary totals change whenever an expense does
+  const reload = () => Promise.all([loadExpenses(), loadSalaries()]);
+
   useEffect(() => {
     (async () => {
       try {
-        const [metaData] = await Promise.all([api.meta(), loadExpenses()]);
+        const [metaData] = await Promise.all([api.meta(), loadExpenses(), loadSalaries()]);
         setMeta(metaData);
         const prefs = getPrefs();
         const defaultCategory =
@@ -148,21 +160,31 @@ export default function Dashboard() {
     });
   }, [expenses, startDate, endDate]);
 
+  const activeSalary = salaries.find((s) => !s.closed_date);
+
+  const expensesWithSalary = useMemo(() => {
+    const labels = Object.fromEntries(salaries.map((s) => [s.id, s.label]));
+    return expenses.map((e) => ({ ...e, salary_label: labels[e.salary_id] || "" }));
+  }, [expenses, salaries]);
+
   // History shows every expense regardless of the Overview date range --
   // only its own independent search box and category dropdown filter it.
   const historyFiltered = useMemo(() => {
-    let rows = historyCategory ? expenses.filter((e) => e.category === historyCategory) : expenses;
+    let rows = historyCategory
+      ? expensesWithSalary.filter((e) => e.category === historyCategory)
+      : expensesWithSalary;
     const q = historySearch.trim().toLowerCase();
     if (q) {
       rows = rows.filter(
         (e) =>
           e.description?.toLowerCase().includes(q) ||
           e.category?.toLowerCase().includes(q) ||
-          e.payment_method?.toLowerCase().includes(q)
+          e.payment_method?.toLowerCase().includes(q) ||
+          e.salary_label.toLowerCase().includes(q)
       );
     }
     return rows;
-  }, [expenses, historyCategory, historySearch]);
+  }, [expensesWithSalary, historyCategory, historySearch]);
 
   const historySorted = useMemo(() => {
     const rows = [...historyFiltered];
@@ -293,7 +315,7 @@ export default function Dashboard() {
       );
       toast.success("Expense added!");
       setAddForm((f) => ({ ...f, amount: "", description: "" }));
-      await loadExpenses();
+      await reload();
     } catch (err) {
       toast.error(err.message);
     } finally {
@@ -321,7 +343,7 @@ export default function Dashboard() {
       toast.success("Expense updated!");
       setSelectedId(null);
       setEditForm(null);
-      await loadExpenses();
+      await reload();
     } catch (err) {
       toast.error(err.message);
     }
@@ -333,15 +355,15 @@ export default function Dashboard() {
       toast.success("Transaction deleted!");
       setSelectedId(null);
       setEditForm(null);
-      await loadExpenses();
+      await reload();
     } catch (err) {
       toast.error(err.message);
     }
   };
 
   const exportCsv = () => {
-    const header = ["Date", "Amount", "Category", "Description", "Payment Method"];
-    const rows = historySorted.map((e) => [e.expense_date, e.amount, e.category, e.description, e.payment_method]);
+    const header = ["Date", "Amount", "Category", "Description", "Payment Method", "Salary"];
+    const rows = historySorted.map((e) => [e.expense_date, e.amount, e.category, e.description, e.payment_method, e.salary_label]);
     const csv = [header, ...rows].map((r) => r.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -419,6 +441,33 @@ export default function Dashboard() {
 
       {tab === "overview" && (
         <div>
+          {activeSalary && (
+            <Link
+              to={`/salaries/${activeSalary.id}`}
+              className="block bg-white dark:bg-slate-900 rounded-2xl shadow-card p-4 mb-6 hover:shadow-lg transition"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Banknote className="w-4 h-4 text-brand-600 dark:text-brand-400 shrink-0" />
+                  <span className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{activeSalary.label}</span>
+                </div>
+                <span className="text-sm text-slate-500 dark:text-slate-400">
+                  {currency(activeSalary.spent)} of {currency(activeSalary.amount)} spent ·{" "}
+                  <span
+                    className={
+                      activeSalary.amount - activeSalary.spent < 0
+                        ? "text-red-500 font-medium"
+                        : "text-green-600 dark:text-green-400 font-medium"
+                    }
+                  >
+                    {currency(activeSalary.amount - activeSalary.spent)} left
+                  </span>
+                </span>
+              </div>
+              <SalaryBar amount={activeSalary.amount} spent={activeSalary.spent} />
+            </Link>
+          )}
+
           <div className="flex flex-wrap items-center gap-3 bg-white dark:bg-slate-900 rounded-2xl shadow-card p-4 mb-6">
             <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Showing expenses for</span>
             <DateRangePicker
@@ -514,6 +563,22 @@ export default function Dashboard() {
       {tab === "add" && (
         <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-card p-6 max-w-lg">
           <h3 className="font-semibold text-slate-800 dark:text-slate-100 mb-4">Add a new expense</h3>
+          {activeSalary ? (
+            <div className="flex items-center gap-2 rounded-xl bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 text-sm px-4 py-2.5 mb-4">
+              <Banknote className="w-4 h-4 shrink-0" />
+              <span>
+                Goes into <span className="font-semibold">{activeSalary.label}</span> ·{" "}
+                {currency(activeSalary.amount - activeSalary.spent)} left
+              </span>
+            </div>
+          ) : (
+            <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 text-sm px-4 py-2.5 mb-4">
+              No current salary, so this will not be linked to a salary.{" "}
+              <Link to="/salaries" className="font-semibold underline">
+                Start one
+              </Link>
+            </div>
+          )}
           <form onSubmit={handleAddSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Date</label>
@@ -653,6 +718,7 @@ export default function Dashboard() {
                           <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{row.category}</td>
                           <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{row.description}</td>
                           <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{row.payment_method}</td>
+                          <td className="px-4 py-3 text-slate-500 dark:text-slate-400 whitespace-nowrap">{row.salary_label || "—"}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -732,6 +798,21 @@ export default function Dashboard() {
                       >
                         {meta.payment_methods.map((p) => (
                           <option key={p} value={p}>{p}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Salary</label>
+                      <select
+                        value={editForm.salary_id ?? ""}
+                        onChange={(e) =>
+                          setEditForm((f) => ({ ...f, salary_id: e.target.value ? Number(e.target.value) : null }))
+                        }
+                        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-4 py-2.5 outline-none focus:ring-2 focus:ring-brand-500"
+                      >
+                        <option value="">No salary</option>
+                        {salaries.map((s) => (
+                          <option key={s.id} value={s.id}>{s.label}</option>
                         ))}
                       </select>
                     </div>

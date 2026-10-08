@@ -33,6 +33,13 @@ export const api = {
   updateExpense: (id, payload, token) =>
     request(`/api/expenses/${id}`, { method: "PUT", body: payload, token }),
   deleteExpense: (id, token) => request(`/api/expenses/${id}`, { method: "DELETE", token }),
+  listSalaries: (token) => request("/api/salaries", { token }),
+  startSalary: (payload, token) => request("/api/salaries", { method: "POST", body: payload, token }),
+  updateSalary: (id, payload, token) =>
+    request(`/api/salaries/${id}`, { method: "PUT", body: payload, token }),
+  closeSalary: (id, token) => request(`/api/salaries/${id}/close`, { method: "POST", token }),
+  reopenSalary: (id, token) => request(`/api/salaries/${id}/reopen`, { method: "POST", token }),
+  deleteSalary: (id, token) => request(`/api/salaries/${id}`, { method: "DELETE", token }),
   accountStats: (token) => request("/api/account/stats", { token }),
   deleteAccount: (payload, token) => request("/api/account", { method: "DELETE", body: payload, token }),
 };

@@ -10,6 +10,8 @@ import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
 import Dashboard from "./pages/Dashboard";
 import Account from "./pages/Account";
+import Salaries from "./pages/Salaries";
+import SalaryDetail from "./pages/SalaryDetail";
 
 export default function App() {
   return (
@@ -43,6 +45,8 @@ export default function App() {
               }
             >
               <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/salaries" element={<Salaries />} />
+              <Route path="/salaries/:id" element={<SalaryDetail />} />
               <Route path="/account" element={<Account />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />

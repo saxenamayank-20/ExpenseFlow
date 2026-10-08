@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
-import { Wallet, LayoutDashboard, UserRound, LogOut, Menu, X, Sun, Moon } from "lucide-react";
+import { Wallet, LayoutDashboard, UserRound, LogOut, Menu, X, Sun, Moon, Banknote } from "lucide-react";
 import toast from "react-hot-toast";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 
 const navItems = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/salaries", label: "Salaries", icon: Banknote },
   { to: "/account", label: "My Account", icon: UserRound },
 ];
 

@@ -7,8 +7,9 @@ A multi-user personal expense tracker with a FastAPI backend and a React + Tailw
 - **Accounts**: register with just a username and password (no email required), log in, forgot-password self-recovery, log out — passwords stored as bcrypt hashes, sessions via JWT
 - **Per-user data isolation**: every account only ever sees and edits its own expenses
 - **Dashboard Overview**: custom calendar date-range picker with quick presets (Today, This Week, This Month, Last 30 Days, This Year, All Time), auto-generated **Smart Insights** (top category, biggest expense, month-over-month change), spending-by-category / daily / monthly trend charts
+- **Salaries**: start a new salary every time you get paid. New expenses go into the current salary, the old one moves to history with how much was spent and saved, and you can open any past salary to see all of its expenses
 - **Add Expense**: a custom date picker and defaults that follow your saved preferences
-- **History & Manage**: its own search box and category filter, independent of the Overview date range, sortable columns, CSV export, and click-a-row edit/delete for fixing mistaken entries
+- **History & Manage**: its own search box and category filter, independent of the Overview date range, sortable columns, CSV export, and click-a-row edit/delete for fixing mistaken entries (or moving one to a different salary)
 - **My Account**: Account Details, Expense Details, Change Password (with show/hide on every field), **Preferences** (dark mode, default category/payment method), and a **Danger Zone** for permanent account deletion
 - **Dark mode** across the entire app, remembered per device
 - A public landing page at `/` for signed-out visitors, with the full app behind auth
@@ -49,7 +50,7 @@ Then open **http://localhost:5173**, register an account, and log in.
 
 ## Data
 
-Tables (`users` and `expenses`) are created automatically in Postgres the first time the backend starts (`expenses.user_id` scopes every row to its owner).
+Tables (`users`, `salaries` and `expenses`) are created automatically in Postgres the first time the backend starts (`user_id` scopes every row to its owner). `expenses.salary_id` links an expense to the salary it came out of. Expenses added before salaries existed just have it empty.
 
 If you're upgrading from the original single-user Streamlit version of this app, its old `expenses` table is automatically renamed to `expenses_legacy` on first run. **The very first account you register claims all of that legacy data**, and `expenses_legacy` is then dropped.
 

@@ -1,10 +1,13 @@
 import os
 import secrets
+from datetime import date
 from pathlib import Path
 
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from typing import Optional
+
 from pydantic import BaseModel
 
 import db
@@ -96,6 +99,13 @@ class ExpenseIn(BaseModel):
     category: str
     description: str
     payment_method: str
+    salary_id: Optional[int] = None
+
+
+class SalaryIn(BaseModel):
+    label: str
+    amount: float
+    received_date: str
 
 
 class PasswordChangeRequest(BaseModel):
@@ -191,9 +201,12 @@ def create_expense(payload: ExpenseIn, current_user=Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Amount must be greater than 0.")
     if not payload.description.strip():
         raise HTTPException(status_code=400, detail="Description is required.")
+    # new expenses always go to the current salary (if there is one)
+    active = db.get_active_salary(current_user["id"])
     db.add_expense(
         current_user["id"], payload.expense_date, payload.amount,
         payload.category, payload.description.strip(), payload.payment_method,
+        active["id"] if active else None,
     )
     return {"success": True}
 
@@ -202,9 +215,12 @@ def create_expense(payload: ExpenseIn, current_user=Depends(get_current_user)):
 def edit_expense(expense_id: int, payload: ExpenseIn, current_user=Depends(get_current_user)):
     if payload.amount <= 0 or not payload.description.strip():
         raise HTTPException(status_code=400, detail="Amount and description are required.")
+    if payload.salary_id is not None and not db.get_salary(current_user["id"], payload.salary_id):
+        raise HTTPException(status_code=404, detail="Salary not found.")
     db.update_expense(
         current_user["id"], expense_id, payload.expense_date, payload.amount,
         payload.category, payload.description.strip(), payload.payment_method,
+        payload.salary_id,
     )
     return {"success": True}
 
@@ -212,6 +228,69 @@ def edit_expense(expense_id: int, payload: ExpenseIn, current_user=Depends(get_c
 @app.delete("/api/expenses/{expense_id}")
 def remove_expense(expense_id: int, current_user=Depends(get_current_user)):
     db.delete_expense(current_user["id"], expense_id)
+    return {"success": True}
+
+
+def check_salary(payload: SalaryIn):
+    if not payload.label.strip():
+        raise HTTPException(status_code=400, detail="Please give the salary a name.")
+    if payload.amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be greater than 0.")
+
+
+def own_salary(user_id, salary_id):
+    salary = db.get_salary(user_id, salary_id)
+    if not salary:
+        raise HTTPException(status_code=404, detail="Salary not found.")
+    return salary
+
+
+@app.get("/api/salaries")
+def list_salaries(current_user=Depends(get_current_user)):
+    return db.get_salaries(current_user["id"])
+
+
+@app.post("/api/salaries")
+def create_salary(payload: SalaryIn, current_user=Depends(get_current_user)):
+    check_salary(payload)
+    salary_id = db.start_salary(
+        current_user["id"], payload.label.strip(), payload.amount, payload.received_date
+    )
+    return {"success": True, "id": salary_id}
+
+
+@app.put("/api/salaries/{salary_id}")
+def edit_salary(salary_id: int, payload: SalaryIn, current_user=Depends(get_current_user)):
+    check_salary(payload)
+    own_salary(current_user["id"], salary_id)
+    db.update_salary(
+        current_user["id"], salary_id, payload.label.strip(), payload.amount, payload.received_date
+    )
+    return {"success": True}
+
+
+@app.post("/api/salaries/{salary_id}/close")
+def close_salary(salary_id: int, current_user=Depends(get_current_user)):
+    own_salary(current_user["id"], salary_id)
+    db.set_salary_closed(current_user["id"], salary_id, date.today().isoformat())
+    return {"success": True}
+
+
+@app.post("/api/salaries/{salary_id}/reopen")
+def reopen_salary(salary_id: int, current_user=Depends(get_current_user)):
+    own_salary(current_user["id"], salary_id)
+    # only one salary can be open at a time
+    active = db.get_active_salary(current_user["id"])
+    if active and active["id"] != salary_id:
+        raise HTTPException(status_code=400, detail=f"Finish \"{active['label']}\" first.")
+    db.set_salary_closed(current_user["id"], salary_id, None)
+    return {"success": True}
+
+
+@app.delete("/api/salaries/{salary_id}")
+def remove_salary(salary_id: int, current_user=Depends(get_current_user)):
+    own_salary(current_user["id"], salary_id)
+    db.delete_salary(current_user["id"], salary_id)
     return {"success": True}
 
 

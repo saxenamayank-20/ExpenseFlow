@@ -56,6 +56,19 @@ def init_db():
         # account model no longer collects or stores email addresses.
         cur.execute("ALTER TABLE users DROP COLUMN IF EXISTS email")
 
+        # one row per salary, expenses get linked to the salary they came out of
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS salaries (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                label TEXT NOT NULL,
+                amount REAL NOT NULL,
+                received_date TEXT NOT NULL,
+                closed_date TEXT,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            )
+        """)
+
         cur.execute("""
             SELECT column_name AS name FROM information_schema.columns
             WHERE table_schema = 'public' AND table_name = 'expenses'
@@ -75,6 +88,11 @@ def init_db():
                 payment_method TEXT,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT now()
             )
+        """)
+        # old expenses just stay unlinked (NULL)
+        cur.execute("""
+            ALTER TABLE expenses ADD COLUMN IF NOT EXISTS
+            salary_id INTEGER REFERENCES salaries(id) ON DELETE SET NULL
         """)
 
 
@@ -169,21 +187,21 @@ def claim_legacy_expenses(user_id):
 
 # ---------- expenses (always scoped to a user) ----------
 
-def add_expense(user_id, expense_date, amount, category, description, payment_method):
+def add_expense(user_id, expense_date, amount, category, description, payment_method, salary_id=None):
     with get_conn() as conn:
         cur = conn.cursor()
         cur.execute("""
             INSERT INTO expenses
-            (user_id, expense_date, amount, category, description, payment_method)
-            VALUES (%s, %s, %s, %s, %s, %s)
-        """, (user_id, str(expense_date), float(amount), category, description, payment_method))
+            (user_id, expense_date, amount, category, description, payment_method, salary_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (user_id, str(expense_date), float(amount), category, description, payment_method, salary_id))
 
 
 def get_expenses(user_id):
     with get_conn() as conn:
         cur = conn.cursor()
         cur.execute("""
-            SELECT id, expense_date, amount, category, description, payment_method
+            SELECT id, expense_date, amount, category, description, payment_method, salary_id
             FROM expenses
             WHERE user_id = %s
             ORDER BY expense_date DESC, id DESC
@@ -200,11 +218,95 @@ def delete_expense(user_id, expense_id):
         )
 
 
-def update_expense(user_id, expense_id, expense_date, amount, category, description, payment_method):
+def update_expense(user_id, expense_id, expense_date, amount, category, description, payment_method, salary_id):
     with get_conn() as conn:
         cur = conn.cursor()
         cur.execute("""
             UPDATE expenses
-            SET expense_date=%s, amount=%s, category=%s, description=%s, payment_method=%s
+            SET expense_date=%s, amount=%s, category=%s, description=%s, payment_method=%s, salary_id=%s
             WHERE id=%s AND user_id=%s
-        """, (str(expense_date), float(amount), category, description, payment_method, expense_id, user_id))
+        """, (str(expense_date), float(amount), category, description, payment_method, salary_id, expense_id, user_id))
+
+
+# ---------- salaries ----------
+
+def get_salaries(user_id):
+    # spent and expense_count come from the linked expenses
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT s.id, s.label, s.amount, s.received_date, s.closed_date,
+                   COALESCE(SUM(e.amount), 0) AS spent, COUNT(e.id) AS expense_count
+            FROM salaries s
+            LEFT JOIN expenses e ON e.salary_id = s.id
+            WHERE s.user_id = %s
+            GROUP BY s.id
+            ORDER BY s.received_date DESC, s.id DESC
+        """, (user_id,))
+        rows = cur.fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_salary(user_id, salary_id):
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT * FROM salaries WHERE id = %s AND user_id = %s", (salary_id, user_id)
+        )
+        row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def get_active_salary(user_id):
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT * FROM salaries WHERE user_id = %s AND closed_date IS NULL
+            ORDER BY received_date DESC, id DESC LIMIT 1
+        """, (user_id,))
+        row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def start_salary(user_id, label, amount, received_date):
+    # closes the current salary and opens the new one in one go
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE salaries SET closed_date = %s WHERE user_id = %s AND closed_date IS NULL",
+            (str(received_date), user_id),
+        )
+        cur.execute("""
+            INSERT INTO salaries (user_id, label, amount, received_date)
+            VALUES (%s, %s, %s, %s)
+            RETURNING id
+        """, (user_id, label, float(amount), str(received_date)))
+        return cur.fetchone()["id"]
+
+
+def update_salary(user_id, salary_id, label, amount, received_date):
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            UPDATE salaries SET label=%s, amount=%s, received_date=%s
+            WHERE id=%s AND user_id=%s
+        """, (label, float(amount), str(received_date), salary_id, user_id))
+
+
+def set_salary_closed(user_id, salary_id, closed_date):
+    # closed_date None = reopen
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE salaries SET closed_date = %s WHERE id = %s AND user_id = %s",
+            (closed_date, salary_id, user_id),
+        )
+
+
+def delete_salary(user_id, salary_id):
+    # its expenses are kept, salary_id goes back to NULL
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "DELETE FROM salaries WHERE id = %s AND user_id = %s", (salary_id, user_id)
+        )
