@@ -2,6 +2,8 @@
 
 A small app I built to track my spending one salary at a time.
 
+![ExpenseFlow dashboard](docs/screenshot.png)
+
 ## Why I built it
 
 I get paid once a month, and in a normal expense list every month blurs into one long list. I wanted each salary to be its own thing, so I can see what came in, what went out and what was left before the next one arrived.
@@ -106,7 +108,7 @@ All routes except auth and `/api/meta` need a `Bearer` token.
 ```
 backend/     FastAPI app (main.py routes, db.py queries, auth.py)
 frontend/    React + Vite app (pages, components, api.js)
-docs/        deployment notes
+docs/        deployment notes and screenshot
 ```
 
 ## Challenges / what I learned
