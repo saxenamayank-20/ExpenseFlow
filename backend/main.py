@@ -67,6 +67,7 @@ def user_public(user, token=None):
         "username": user["username"],
         "full_name": user["full_name"],
         "created_at": user["created_at"],
+        "has_recovery_code": bool(user.get("recovery_hash")),
     }
     if token:
         data["token"] = token
@@ -87,6 +88,7 @@ class LoginRequest(BaseModel):
 
 class ForgotPasswordRequest(BaseModel):
     username: str
+    recovery_code: str
     new_password: str
     confirm_password: str
 
@@ -115,6 +117,10 @@ class DeleteAccountRequest(BaseModel):
     current_password: str
 
 
+class RecoveryCodeRequest(BaseModel):
+    current_password: str
+
+
 @app.get("/api/meta")
 def meta():
     return {"categories": CATEGORIES, "payment_methods": PAYMENT_METHODS}
@@ -134,7 +140,8 @@ def register(payload: RegisterRequest):
 
     is_first_user = db.count_users() == 0
     password_hash = auth.hash_password(payload.password)
-    user_id = db.create_user(username, full_name, password_hash)
+    recovery_code = auth.make_recovery_code()
+    user_id = db.create_user(username, full_name, password_hash, auth.hash_recovery_code(recovery_code))
 
     claimed = 0
     if is_first_user and db.has_legacy_expenses():
@@ -144,6 +151,8 @@ def register(payload: RegisterRequest):
     token = auth.create_access_token(user_id, SECRET_KEY)
     result = user_public(user, token)
     result["claimed_legacy_expenses"] = claimed
+    # only time the plain code leaves the server
+    result["recovery_code"] = recovery_code
     return result
 
 
@@ -158,15 +167,19 @@ def login(payload: LoginRequest):
 
 @app.post("/api/auth/forgot-password")
 def forgot_password(payload: ForgotPasswordRequest):
-    user = db.get_user_by_username(payload.username.strip())
-    if not user:
-        raise HTTPException(status_code=404, detail="No account found with that username.")
     if len(payload.new_password) < 8:
         raise HTTPException(status_code=400, detail="New password must be at least 8 characters.")
     if payload.new_password != payload.confirm_password:
         raise HTTPException(status_code=400, detail="Passwords do not match.")
+    user = db.get_user_by_username(payload.username.strip())
+    # same message either way, so this can't be used to check which usernames exist
+    if not user or not auth.verify_recovery_code(payload.recovery_code, user["recovery_hash"]):
+        raise HTTPException(status_code=400, detail="Username or recovery code is wrong.")
     db.update_password(user["id"], auth.hash_password(payload.new_password))
-    return {"success": True}
+    # codes are single use, hand back a fresh one
+    new_code = auth.make_recovery_code()
+    db.update_recovery_hash(user["id"], auth.hash_recovery_code(new_code))
+    return {"success": True, "recovery_code": new_code}
 
 
 @app.get("/api/auth/me")
@@ -185,6 +198,16 @@ def change_password(payload: PasswordChangeRequest, current_user=Depends(get_cur
         raise HTTPException(status_code=400, detail="New passwords do not match.")
     db.update_password(current_user["id"], auth.hash_password(payload.new_password))
     return {"success": True}
+
+
+@app.post("/api/auth/recovery-code")
+def new_recovery_code(payload: RecoveryCodeRequest, current_user=Depends(get_current_user)):
+    # makes a new code (old one stops working), needs the password so a stolen session can't do it
+    if not auth.verify_password(payload.current_password, current_user["password_hash"]):
+        raise HTTPException(status_code=400, detail="Current password is incorrect.")
+    code = auth.make_recovery_code()
+    db.update_recovery_hash(current_user["id"], auth.hash_recovery_code(code))
+    return {"recovery_code": code}
 
 
 @app.get("/api/expenses")

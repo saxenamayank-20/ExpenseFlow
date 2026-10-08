@@ -24,6 +24,7 @@ import { useTheme } from "../context/ThemeContext";
 import { api } from "../api";
 import { getPrefs, setPrefs } from "../lib/prefs";
 import StatCard from "../components/StatCard";
+import RecoveryCodeBox from "../components/RecoveryCodeBox";
 
 function currency(n) {
   return `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
@@ -38,7 +39,7 @@ const SECTIONS = [
 ];
 
 export default function Account() {
-  const { user, token, logout } = useAuth();
+  const { user, token, logout, refreshUser } = useAuth();
   const { theme, setTheme } = useTheme();
   const navigate = useNavigate();
 
@@ -52,6 +53,10 @@ export default function Account() {
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+
+  const [codePassword, setCodePassword] = useState("");
+  const [newCode, setNewCode] = useState("");
+  const [makingCode, setMakingCode] = useState(false);
 
   const [deletePassword, setDeletePassword] = useState("");
   const [showDeletePassword, setShowDeletePassword] = useState(false);
@@ -73,6 +78,21 @@ export default function Account() {
       toast.error(err.message);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleNewCode = async (e) => {
+    e.preventDefault();
+    setMakingCode(true);
+    try {
+      const data = await api.newRecoveryCode({ current_password: codePassword }, token);
+      setNewCode(data.recovery_code);
+      setCodePassword("");
+      await refreshUser();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setMakingCode(false);
     }
   };
 
@@ -224,6 +244,7 @@ export default function Account() {
           )}
 
           {section === "password" && (
+            <div className="space-y-5">
             <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-card p-6 max-w-lg">
               <div className="flex items-center gap-2 mb-4">
                 <KeyRound className="w-5 h-5 text-slate-400" />
@@ -302,6 +323,46 @@ export default function Account() {
                   {submitting ? "Updating..." : "Update password"}
                 </button>
               </form>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-card p-6 max-w-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <ShieldCheck className="w-5 h-5 text-slate-400" />
+                <h3 className="font-semibold text-slate-800 dark:text-slate-100">Recovery code</h3>
+              </div>
+              {newCode ? (
+                <RecoveryCodeBox code={newCode} />
+              ) : (
+                <>
+                  <p
+                    className={`text-sm mb-4 ${
+                      user?.has_recovery_code ? "text-slate-500 dark:text-slate-400" : "text-amber-700 dark:text-amber-400"
+                    }`}
+                  >
+                    {user?.has_recovery_code
+                      ? "You have a recovery code. Making a new one stops the old one from working."
+                      : "You don't have a recovery code yet, so you can't reset your password if you forget it. Make one now."}
+                  </p>
+                  <form onSubmit={handleNewCode} className="space-y-4">
+                    <input
+                      type="password"
+                      required
+                      value={codePassword}
+                      onChange={(e) => setCodePassword(e.target.value)}
+                      placeholder="Current password"
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-4 py-2.5 outline-none focus:ring-2 focus:ring-brand-500"
+                    />
+                    <button
+                      type="submit"
+                      disabled={makingCode}
+                      className="w-full rounded-xl border border-brand-200 dark:border-brand-800 text-brand-700 dark:text-brand-300 font-medium py-2.5 hover:bg-brand-50 dark:hover:bg-brand-900/30 transition disabled:opacity-60"
+                    >
+                      {makingCode ? "Making code..." : user?.has_recovery_code ? "Make a new code" : "Make recovery code"}
+                    </button>
+                  </form>
+                </>
+              )}
+            </div>
             </div>
           )}
 

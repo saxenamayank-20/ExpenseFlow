@@ -55,6 +55,8 @@ def init_db():
         # Drops the email column left over from earlier deployments -- the
         # account model no longer collects or stores email addresses.
         cur.execute("ALTER TABLE users DROP COLUMN IF EXISTS email")
+        # hashed recovery code for forgot password, NULL for older accounts
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS recovery_hash TEXT")
 
         # one row per payday. a salary covers everything from its date
         # until the day before the next salary, so expenses join by date
@@ -119,15 +121,24 @@ def get_user_by_id(user_id):
     return dict(row) if row else None
 
 
-def create_user(username, full_name, password_hash):
+def create_user(username, full_name, password_hash, recovery_hash):
     with get_conn() as conn:
         cur = conn.cursor()
         cur.execute("""
-            INSERT INTO users (username, full_name, password_hash)
-            VALUES (%s, %s, %s)
+            INSERT INTO users (username, full_name, password_hash, recovery_hash)
+            VALUES (%s, %s, %s, %s)
             RETURNING id
-        """, (username, full_name, password_hash))
+        """, (username, full_name, password_hash, recovery_hash))
         return cur.fetchone()["id"]
+
+
+def update_recovery_hash(user_id, recovery_hash):
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE users SET recovery_hash = %s WHERE id = %s",
+            (recovery_hash, user_id),
+        )
 
 
 def update_password(user_id, password_hash):
