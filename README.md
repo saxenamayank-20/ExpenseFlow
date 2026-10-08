@@ -74,11 +74,9 @@ cp .env.example .env
 npm run dev
 ```
 
-`frontend/.env` has one variable, `VITE_API_URL`, which points at the backend (`http://localhost:8000` locally).
+`frontend/.env` has one variable, `VITE_API_URL`, which points at the backend.
 
-Open http://localhost:5173 and register an account.
-
-Deploying to Vercel, Render and Neon is covered in [docs/deployment.md](docs/deployment.md).
+Open the address Vite prints in the terminal and register an account.
 
 ## API routes
 
@@ -108,7 +106,7 @@ All routes except auth and `/api/meta` need a `Bearer` token.
 ```
 backend/     FastAPI app (main.py routes, db.py queries, auth.py)
 frontend/    React + Vite app (pages, components, api.js)
-docs/        deployment notes and screenshot
+docs/        screenshot
 ```
 
 ## Challenges / what I learned
