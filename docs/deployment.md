@@ -20,7 +20,7 @@ The data lives on Neon, not on Render's disk, so it survives Render redeploys an
    - `ALLOWED_ORIGINS`: leave blank for now, set it after the frontend is deployed
 5. Deploy and note the backend URL.
 
-Tables (and new columns, like `expenses.salary_id`) are created when the backend starts, so a redeploy is all a schema change needs.
+Tables (and column changes) are applied when the backend starts, so a redeploy is all a schema change needs.
 
 ## Frontend (Vercel)
 

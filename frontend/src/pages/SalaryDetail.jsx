@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Banknote, Wallet, PiggyBank, Receipt, Pencil, CircleCheck, RotateCcw, Trash2, Save, X } from "lucide-react";
+import { ArrowLeft, Banknote, Wallet, PiggyBank, Pencil, Trash2, Save, X, ArrowDownLeft } from "lucide-react";
 import toast from "react-hot-toast";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../api";
-import { formatPretty } from "../lib/date";
+import { formatPretty, toISO } from "../lib/date";
+import { inSalary, salaryForDate } from "../lib/salary";
 import StatCard from "../components/StatCard";
 import DatePicker from "../components/DatePicker";
 import SalaryBar from "../components/SalaryBar";
@@ -45,7 +46,10 @@ export default function SalaryDetail() {
   }, [salaryId]);
 
   const salary = salaries.find((s) => s.id === salaryId);
-  const rows = useMemo(() => expenses.filter((e) => e.salary_id === salaryId), [expenses, salaryId]);
+  const rows = useMemo(
+    () => (salary ? expenses.filter((e) => inSalary(salary, e.expense_date)) : []),
+    [expenses, salary]
+  );
 
   const byCategory = useMemo(() => {
     const map = {};
@@ -73,29 +77,8 @@ export default function SalaryDetail() {
     }
   };
 
-  const handleFinish = async () => {
-    if (!window.confirm(`Finish "${salary.label}"? New expenses won't be linked to it anymore.`)) return;
-    try {
-      await api.closeSalary(salaryId, token);
-      toast.success("Salary moved to history.");
-      await load();
-    } catch (err) {
-      toast.error(err.message);
-    }
-  };
-
-  const handleReopen = async () => {
-    try {
-      await api.reopenSalary(salaryId, token);
-      toast.success("Salary reopened.");
-      await load();
-    } catch (err) {
-      toast.error(err.message);
-    }
-  };
-
   const handleDelete = async () => {
-    if (!window.confirm(`Delete "${salary.label}"? Its expenses are kept, they just won't belong to any salary.`)) return;
+    if (!window.confirm(`Delete "${salary.label}"? Its expenses are kept and move into the salary before it.`)) return;
     try {
       await api.deleteSalary(salaryId, token);
       toast.success("Salary deleted.");
@@ -126,8 +109,7 @@ export default function SalaryDetail() {
     );
   }
 
-  const left = salary.amount - salary.spent;
-  const isCurrent = !salary.closed_date;
+  const isCurrent = salaryForDate(salaries, toISO(new Date()))?.id === salary.id;
 
   return (
     <div className="max-w-5xl mx-auto px-6 sm:px-8 py-8">
@@ -153,7 +135,7 @@ export default function SalaryDetail() {
             )}
           </div>
           <p className="text-slate-500 dark:text-slate-400 text-sm">
-            {formatPretty(salary.received_date)} – {isCurrent ? "now" : formatPretty(salary.closed_date)}
+            {formatPretty(salary.received_date)} – {salary.end_date ? formatPretty(salary.end_date) : "next salary"}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -164,23 +146,6 @@ export default function SalaryDetail() {
             <Pencil className="w-4 h-4" />
             Edit
           </button>
-          {isCurrent ? (
-            <button
-              onClick={handleFinish}
-              className="flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
-            >
-              <CircleCheck className="w-4 h-4" />
-              Finish
-            </button>
-          ) : (
-            <button
-              onClick={handleReopen}
-              className="flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
-            >
-              <RotateCcw className="w-4 h-4" />
-              Reopen
-            </button>
-          )}
           <button
             onClick={handleDelete}
             className="flex items-center gap-1.5 rounded-xl border border-red-200 dark:border-red-900 px-3 py-2 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition"
@@ -237,18 +202,31 @@ export default function SalaryDetail() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
         <StatCard icon={Banknote} label="Salary" value={currency(salary.amount)} accent={{ bg: "#f5f3ff", fg: "#7c3aed" }} />
+        <StatCard
+          icon={ArrowDownLeft}
+          label="Carried over"
+          value={`${salary.carried_over < 0 ? "-" : ""}${currency(Math.abs(salary.carried_over))}`}
+          accent={{ bg: "#eff6ff", fg: "#3b82f6" }}
+        />
         <StatCard icon={Wallet} label="Spent" value={currency(salary.spent)} accent={{ bg: "#fdf2f8", fg: "#ec4899" }} />
         <StatCard
           icon={PiggyBank}
-          label={left < 0 ? "Overspent" : isCurrent ? "Left" : "Saved"}
-          value={currency(Math.abs(left))}
-          accent={left < 0 ? { bg: "#fef2f2", fg: "#ef4444" } : { bg: "#f0fdf4", fg: "#16a34a" }}
+          label={salary.left < 0 ? "Overspent" : "Left"}
+          value={currency(Math.abs(salary.left))}
+          accent={salary.left < 0 ? { bg: "#fef2f2", fg: "#ef4444" } : { bg: "#f0fdf4", fg: "#16a34a" }}
         />
-        <StatCard icon={Receipt} label="Expenses" value={salary.expense_count} accent={{ bg: "#fff7ed", fg: "#f97316" }} />
       </div>
 
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-card p-5 mb-6">
-        <SalaryBar amount={salary.amount} spent={salary.spent} />
+        <div className="flex flex-wrap justify-between gap-2 text-sm text-slate-500 dark:text-slate-400 mb-3">
+          <span>
+            {currency(salary.spent)} of {currency(salary.available)} spent · {salary.expense_count} expenses
+          </span>
+          {salary.end_date && salary.left !== 0 && (
+            <span>{currency(Math.abs(salary.left))} {salary.left < 0 ? "taken from" : "carried into"} the next salary</span>
+          )}
+        </div>
+        <SalaryBar amount={salary.available} spent={salary.spent} />
       </div>
 
       {!rows.length ? (
@@ -303,7 +281,7 @@ export default function SalaryDetail() {
               </table>
             </div>
             <p className="text-xs text-slate-400 px-4 py-3 border-t border-slate-100 dark:border-slate-800">
-              To edit or move an expense, use History & Manage on the dashboard.
+              To edit an expense, use History & Manage on the dashboard. Changing its date moves it to another salary.
             </p>
           </div>
         </div>

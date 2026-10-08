@@ -43,6 +43,8 @@ import StatCard from "../components/StatCard";
 import DatePicker from "../components/DatePicker";
 import DateRangePicker from "../components/DateRangePicker";
 import SalaryBar from "../components/SalaryBar";
+import { salaryForDate } from "../lib/salary";
+import { toISO } from "../lib/date";
 
 const PIE_COLORS = ["#7c3aed", "#a855f7", "#ec4899", "#f472b6", "#c084fc", "#f97316", "#22c55e", "#3b82f6", "#94a3b8"];
 
@@ -160,12 +162,14 @@ export default function Dashboard() {
     });
   }, [expenses, startDate, endDate]);
 
-  const activeSalary = salaries.find((s) => !s.closed_date);
+  const activeSalary = salaryForDate(salaries, toISO(new Date()));
+  // the salary a new expense will land in, based on the date picked
+  const addSalary = salaryForDate(salaries, addForm.expense_date);
 
-  const expensesWithSalary = useMemo(() => {
-    const labels = Object.fromEntries(salaries.map((s) => [s.id, s.label]));
-    return expenses.map((e) => ({ ...e, salary_label: labels[e.salary_id] || "" }));
-  }, [expenses, salaries]);
+  const expensesWithSalary = useMemo(
+    () => expenses.map((e) => ({ ...e, salary_label: salaryForDate(salaries, e.expense_date)?.label || "" })),
+    [expenses, salaries]
+  );
 
   // History shows every expense regardless of the Overview date range --
   // only its own independent search box and category dropdown filter it.
@@ -452,19 +456,19 @@ export default function Dashboard() {
                   <span className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{activeSalary.label}</span>
                 </div>
                 <span className="text-sm text-slate-500 dark:text-slate-400">
-                  {currency(activeSalary.spent)} of {currency(activeSalary.amount)} spent ·{" "}
+                  {currency(activeSalary.spent)} of {currency(activeSalary.available)} spent ·{" "}
                   <span
                     className={
-                      activeSalary.amount - activeSalary.spent < 0
+                      activeSalary.left < 0
                         ? "text-red-500 font-medium"
                         : "text-green-600 dark:text-green-400 font-medium"
                     }
                   >
-                    {currency(activeSalary.amount - activeSalary.spent)} left
+                    {currency(activeSalary.left)} left
                   </span>
                 </span>
               </div>
-              <SalaryBar amount={activeSalary.amount} spent={activeSalary.spent} />
+              <SalaryBar amount={activeSalary.available} spent={activeSalary.spent} />
             </Link>
           )}
 
@@ -563,19 +567,19 @@ export default function Dashboard() {
       {tab === "add" && (
         <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-card p-6 max-w-lg">
           <h3 className="font-semibold text-slate-800 dark:text-slate-100 mb-4">Add a new expense</h3>
-          {activeSalary ? (
+          {addSalary ? (
             <div className="flex items-center gap-2 rounded-xl bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 text-sm px-4 py-2.5 mb-4">
               <Banknote className="w-4 h-4 shrink-0" />
               <span>
-                Goes into <span className="font-semibold">{activeSalary.label}</span> ·{" "}
-                {currency(activeSalary.amount - activeSalary.spent)} left
+                Goes into <span className="font-semibold">{addSalary.label}</span> ·{" "}
+                {currency(addSalary.left)} left
               </span>
             </div>
           ) : (
             <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 text-sm px-4 py-2.5 mb-4">
-              No current salary, so this will not be linked to a salary.{" "}
+              {salaries.length ? "This date is before your first salary." : "You have no salaries yet."}{" "}
               <Link to="/salaries" className="font-semibold underline">
-                Start one
+                Add one
               </Link>
             </div>
           )}
@@ -798,21 +802,6 @@ export default function Dashboard() {
                       >
                         {meta.payment_methods.map((p) => (
                           <option key={p} value={p}>{p}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Salary</label>
-                      <select
-                        value={editForm.salary_id ?? ""}
-                        onChange={(e) =>
-                          setEditForm((f) => ({ ...f, salary_id: e.target.value ? Number(e.target.value) : null }))
-                        }
-                        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-4 py-2.5 outline-none focus:ring-2 focus:ring-brand-500"
-                      >
-                        <option value="">No salary</option>
-                        {salaries.map((s) => (
-                          <option key={s.id} value={s.id}>{s.label}</option>
                         ))}
                       </select>
                     </div>

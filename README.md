@@ -2,17 +2,16 @@
 
 A small app I built to track my spending one salary at a time.
 
-![ExpenseFlow dashboard](docs/screenshot.png)
-
 ## Why I built it
 
 I get paid once a month, and in a normal expense list every month blurs into one long list. I wanted each salary to be its own thing, so I can see what came in, what went out and what was left before the next one arrived.
 
 ## Features
 
-- Start a new salary every payday. New expenses go into the current salary automatically.
-- Finished salaries move to a history list showing the amount, how much was spent and how much was saved. Click one to see all of its expenses and a category breakdown.
-- Add, edit and delete expenses, and move an expense to a different salary.
+- Add a salary every payday. It covers everything you spend from that day until the next salary, so expenses land in the right one by their date (past salaries work too).
+- Whatever is left from a salary carries over into the next one, and overspending gets taken out of it.
+- Salary history shows each salary's amount, spent and saved. Click one to see all of its expenses and a category breakdown.
+- Add, edit and delete expenses.
 - Overview with a date range picker, spending by category, daily and monthly charts, and a few quick insights (top category, biggest expense, this month vs last).
 - History table with search, category filter, sorting and CSV export.
 - Accounts with username and password (bcrypt + JWT). Each user only sees their own data.
@@ -27,7 +26,7 @@ I get paid once a month, and in a normal expense list every month blurs into one
 
 ## How it works
 
-The React app runs in the browser and calls the FastAPI backend over HTTP with a JWT in the header. The backend checks the token, runs the query against Postgres on Neon and sends JSON back. Every row has a `user_id`, and expenses also have a `salary_id` that links them to the salary they came out of. The salary totals (spent, left) are worked out in SQL from the linked expenses.
+The React app runs in the browser and calls the FastAPI backend over HTTP with a JWT in the header. The backend checks the token, runs the query against Postgres on Neon and sends JSON back. Every row has a `user_id`. Expenses aren't linked to a salary directly: one SQL query works out each salary's period (its date up to the next salary) and the carry-over from all the earlier ones.
 
 ```mermaid
 flowchart LR
@@ -92,15 +91,13 @@ All routes except auth and `/api/meta` need a `Bearer` token.
 | GET | `/api/auth/me` | Current user |
 | PUT | `/api/auth/password` | Change password |
 | GET | `/api/expenses` | List my expenses |
-| POST | `/api/expenses` | Add an expense (goes into the current salary) |
-| PUT | `/api/expenses/{id}` | Edit an expense or move it to another salary |
+| POST | `/api/expenses` | Add an expense |
+| PUT | `/api/expenses/{id}` | Edit an expense |
 | DELETE | `/api/expenses/{id}` | Delete an expense |
-| GET | `/api/salaries` | List salaries with spent and expense count |
-| POST | `/api/salaries` | Start a new salary (finishes the current one) |
+| GET | `/api/salaries` | List salaries with their period, spent, carried over and left |
+| POST | `/api/salaries` | Add a salary |
 | PUT | `/api/salaries/{id}` | Edit name, amount or date |
-| POST | `/api/salaries/{id}/close` | Finish a salary |
-| POST | `/api/salaries/{id}/reopen` | Reopen a finished salary |
-| DELETE | `/api/salaries/{id}` | Delete a salary (its expenses are kept) |
+| DELETE | `/api/salaries/{id}` | Delete a salary (its expenses fall into the one before) |
 | GET | `/api/account/stats` | Totals for the account page |
 | DELETE | `/api/account` | Delete my account and all its data |
 
@@ -109,14 +106,14 @@ All routes except auth and `/api/meta` need a `Bearer` token.
 ```
 backend/     FastAPI app (main.py routes, db.py queries, auth.py)
 frontend/    React + Vite app (pages, components, api.js)
-docs/        deployment notes and screenshot
+docs/        deployment notes
 ```
 
 ## Challenges / what I learned
 
 - Opening a fresh connection to Neon on every query took seconds, so some requests were very slow. Switching to a small connection pool fixed it.
 - Moving from SQLite to Postgres meant moving the old single-user data over, so the first account to register claims those rows.
-- Getting salaries in without breaking old data: expenses got a nullable `salary_id`, so older expenses just stay unlinked until I move them.
+- My first try linked each expense to a salary with a `salary_id`, but a backdated expense still went into the current salary. Matching expenses to salaries by date fixed that, and the carry-over is one window function (`SUM ... OVER`) in the same query.
 
 ## Known limitations and what's next
 

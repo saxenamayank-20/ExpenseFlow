@@ -37,8 +37,6 @@ export const api = {
   startSalary: (payload, token) => request("/api/salaries", { method: "POST", body: payload, token }),
   updateSalary: (id, payload, token) =>
     request(`/api/salaries/${id}`, { method: "PUT", body: payload, token }),
-  closeSalary: (id, token) => request(`/api/salaries/${id}/close`, { method: "POST", token }),
-  reopenSalary: (id, token) => request(`/api/salaries/${id}/reopen`, { method: "POST", token }),
   deleteSalary: (id, token) => request(`/api/salaries/${id}`, { method: "DELETE", token }),
   accountStats: (token) => request("/api/account/stats", { token }),
   deleteAccount: (payload, token) => request("/api/account", { method: "DELETE", body: payload, token }),

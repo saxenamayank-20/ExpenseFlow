@@ -1,4 +1,5 @@
-// how much of a salary is used up, goes red once you overspend
+// how much of a salary is used up, goes red once you overspend.
+// amount here is what's available (salary + carried over)
 export default function SalaryBar({ amount, spent }) {
   const pct = amount > 0 ? Math.min(100, Math.round((spent / amount) * 100)) : 0;
   const over = spent > amount;
