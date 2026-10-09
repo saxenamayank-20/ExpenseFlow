@@ -20,8 +20,17 @@ if not DATABASE_URL:
 # TCP+TLS handshake to Neon on every single query -- that handshake alone
 # was taking several seconds, so a request touching multiple tables (e.g.
 # register) was compounding it into double-digit-second responses.
+# keepalives let the os notice a connection neon dropped (it suspends when idle)
+# instead of a query hanging on it for minutes. tcp_user_timeout caps that wait at 10s
 _pool = psycopg2.pool.ThreadedConnectionPool(
-    1, 10, DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor
+    1, 10, DATABASE_URL,
+    cursor_factory=psycopg2.extras.RealDictCursor,
+    connect_timeout=10,
+    keepalives=1,
+    keepalives_idle=30,
+    keepalives_interval=10,
+    keepalives_count=3,
+    tcp_user_timeout=10000,
 )
 
 

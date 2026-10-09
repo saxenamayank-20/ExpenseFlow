@@ -114,6 +114,7 @@ docs/        screenshot
 
 - Opening a fresh connection to Neon on every query took seconds, so some requests were very slow. Switching to a small connection pool fixed it.
 - Every query was still 3 round trips (BEGIN, query, COMMIT). Autocommit made it 1, and pooled connections that Neon dropped while asleep get swapped out instead of failing the request.
+- The backend was on Render in Singapore but the database was on Neon in US East, so every query crossed the Pacific. Moving the database to Singapore took most requests from ~1.5s to ~0.2s.
 - Moving from SQLite to Postgres meant moving the old single-user data over, so the first account to register claims those rows.
 - My first try linked each expense to a salary with a `salary_id`, but a backdated expense still went into the current salary. Matching expenses to salaries by date fixed that, and the carry-over is one window function (`SUM ... OVER`) in the same query.
 
