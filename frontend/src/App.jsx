@@ -9,6 +9,8 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
 import Dashboard from "./pages/Dashboard";
+import Analytics from "./pages/Analytics";
+import History from "./pages/History";
 import Account from "./pages/Account";
 import Salaries from "./pages/Salaries";
 import SalaryDetail from "./pages/SalaryDetail";
@@ -47,6 +49,8 @@ export default function App() {
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/salaries" element={<Salaries />} />
               <Route path="/salaries/:id" element={<SalaryDetail />} />
+              <Route path="/analytics" element={<Analytics />} />
+              <Route path="/history" element={<History />} />
               <Route path="/account" element={<Account />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />

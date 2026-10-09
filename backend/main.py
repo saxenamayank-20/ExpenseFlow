@@ -115,6 +115,12 @@ class DeleteAccountRequest(BaseModel):
     current_password: str
 
 
+# for the uptime pinger, keeps render's free plan from going to sleep. no db on purpose
+@app.get("/api/health")
+def health():
+    return {"ok": True}
+
+
 @app.get("/api/meta")
 def meta():
     return {"categories": CATEGORIES, "payment_methods": PAYMENT_METHODS}

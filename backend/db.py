@@ -1,4 +1,5 @@
 import os
+import time
 from contextlib import contextmanager
 
 import psycopg2
@@ -24,24 +25,57 @@ _pool = psycopg2.pool.ThreadedConnectionPool(
 )
 
 
+# when each pooled connection was last used, keyed by id(conn)
+_last_used = {}
+
+
+def _alive(conn):
+    # neon suspends after 5 idle min and drops our connections, so only
+    # check (one quick round trip) if this one sat around for a while
+    if conn.closed:
+        return False
+    if time.time() - _last_used.get(id(conn), 0) < 60:
+        return True
+    try:
+        conn.autocommit = True
+        conn.cursor().execute("SELECT 1")
+        return True
+    except psycopg2.Error:
+        return False
+
+
 @contextmanager
-def get_conn():
+def get_conn(transaction=False):
+    # autocommit by default: 1 round trip per query instead of BEGIN + query + COMMIT.
+    # transaction=True only where several statements must all go through together
     conn = _pool.getconn()
+    # after a neon suspend every pooled connection is dead, so keep swapping
+    for _ in range(10):
+        if _alive(conn):
+            break
+        _pool.putconn(conn, close=True)
+        conn = _pool.getconn()
+    conn.autocommit = not transaction
+    broken = False
     try:
         yield conn
         conn.commit()
+    except (psycopg2.OperationalError, psycopg2.InterfaceError):
+        broken = True
+        raise
     except Exception:
         conn.rollback()
         raise
     finally:
-        _pool.putconn(conn)
+        _last_used[id(conn)] = time.time()
+        _pool.putconn(conn, close=broken)
 
 
 def init_db():
     """Create tables. Migrates a pre-auth single-user expenses table
     (no user_id column) out of the way so its data can be claimed by
     the first registered account."""
-    with get_conn() as conn:
+    with get_conn(transaction=True) as conn:
         cur = conn.cursor()
         cur.execute("""
             CREATE TABLE IF NOT EXISTS users (
@@ -55,6 +89,7 @@ def init_db():
         # Drops the email column left over from earlier deployments -- the
         # account model no longer collects or stores email addresses.
         cur.execute("ALTER TABLE users DROP COLUMN IF EXISTS email")
+        cur.execute("ALTER TABLE users DROP COLUMN IF EXISTS recovery_hash")
 
         # one row per payday. a salary covers everything from its date
         # until the day before the next salary, so expenses join by date
@@ -159,7 +194,7 @@ def has_legacy_expenses():
 
 def claim_legacy_expenses(user_id):
     """Assign pre-auth demo/seed expenses to the first account that registers."""
-    with get_conn() as conn:
+    with get_conn(transaction=True) as conn:
         cur = conn.cursor()
         cur.execute("""
             SELECT table_name FROM information_schema.tables

@@ -281,7 +281,7 @@ export default function SalaryDetail() {
               </table>
             </div>
             <p className="text-xs text-slate-400 px-4 py-3 border-t border-slate-100 dark:border-slate-800">
-              To edit an expense, use History & Manage on the dashboard. Changing its date moves it to another salary.
+              To edit an expense, use the History page. Changing its date moves it to another salary.
             </p>
           </div>
         </div>

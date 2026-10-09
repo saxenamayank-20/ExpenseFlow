@@ -13,9 +13,9 @@ I get paid once a month, and in a normal expense list every month blurs into one
 - Add a salary every payday. It covers everything you spend from that day until the next salary, so expenses land in the right one by their date (past salaries work too).
 - Whatever is left from a salary carries over into the next one, and overspending gets taken out of it.
 - Salary history shows each salary's amount, spent and saved. Click one to see all of its expenses and a category breakdown.
-- Add, edit and delete expenses.
-- Overview with a date range picker, spending by category, daily and monthly charts, and a few quick insights (top category, biggest expense, this month vs last).
-- History table with search, category filter, sorting and CSV export.
+- **Dashboard:** current salary, a date range picker, quick insights (top category, biggest expense, this month vs last), totals, and the Add Expense form.
+- **Analytics:** spending by category, daily and monthly charts, and salary vs spent for every salary. Each chart has a short note on what it shows and a takeaway from your data.
+- **History:** every expense with search, category filter, sorting, CSV export, and edit/delete.
 - Accounts with username and password (bcrypt + JWT). Each user only sees their own data.
 - Dark mode and saved defaults for category and payment method.
 
@@ -80,10 +80,11 @@ Open the address Vite prints in the terminal and register an account.
 
 ## API routes
 
-All routes except auth and `/api/meta` need a `Bearer` token.
+All routes except auth, `/api/meta` and `/api/health` need a `Bearer` token.
 
 | Method | Route | What it does |
 | --- | --- | --- |
+| GET | `/api/health` | Health check for the uptime pinger (no database) |
 | GET | `/api/meta` | Categories and payment methods |
 | POST | `/api/auth/register` | Create an account |
 | POST | `/api/auth/login` | Log in, returns a token |
@@ -112,12 +113,13 @@ docs/        screenshot
 ## Challenges / what I learned
 
 - Opening a fresh connection to Neon on every query took seconds, so some requests were very slow. Switching to a small connection pool fixed it.
+- Every query was still 3 round trips (BEGIN, query, COMMIT). Autocommit made it 1, and pooled connections that Neon dropped while asleep get swapped out instead of failing the request.
 - Moving from SQLite to Postgres meant moving the old single-user data over, so the first account to register claims those rows.
 - My first try linked each expense to a salary with a `salary_id`, but a backdated expense still went into the current salary. Matching expenses to salaries by date fixed that, and the carry-over is one window function (`SUM ... OVER`) in the same query.
 
 ## Known limitations and what's next
 
-- Render's free plan sleeps, so the first load after a while is slow.
+- Render's free plan sleeps after 15 idle minutes. A free uptime pinger hitting `/api/health` every 10 minutes keeps it awake.
 - Forgot password only asks for the username, so anyone who knows it can reset the password. This needs a proper check.
 - No automated tests yet.
 - Amounts are always shown in ₹.
