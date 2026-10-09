@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Wallet, Receipt, TrendingUp, TrendingDown, HeartPulse, Plus, Trophy, Zap, Banknote, ChartColumn } from "lucide-react";
+import { Wallet, Receipt, TrendingUp, TrendingDown, HeartPulse, Plus, Trophy, Zap, Banknote } from "lucide-react";
 import toast from "react-hot-toast";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../api";
@@ -274,18 +274,10 @@ export default function Dashboard() {
             <StatCard icon={HeartPulse} label="Medical Spending" value={currency(medical)} accent={{ bg: "#fef2f2", fg: "#ef4444" }} />
           </div>
 
-          {!dateFiltered.length ? (
+          {!dateFiltered.length && (
             <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-card p-12 text-center text-slate-400">
               No expenses match your current filters. Add one from the "Add Expense" tab.
             </div>
-          ) : (
-            <Link
-              to="/analytics"
-              className="flex items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 p-4 text-sm font-medium text-brand-600 dark:text-brand-400 hover:bg-white dark:hover:bg-slate-900 transition"
-            >
-              <ChartColumn className="w-4 h-4" />
-              See the charts on Performance & Analytics
-            </Link>
           )}
         </div>
       )}
