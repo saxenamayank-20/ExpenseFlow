@@ -38,8 +38,6 @@ export const api = {
   updateSalary: (id, payload, token) =>
     request(`/api/salaries/${id}`, { method: "PUT", body: payload, token }),
   deleteSalary: (id, token) => request(`/api/salaries/${id}`, { method: "DELETE", token }),
-  newRecoveryCode: (payload, token) =>
-    request("/api/auth/recovery-code", { method: "POST", body: payload, token }),
   accountStats: (token) => request("/api/account/stats", { token }),
   deleteAccount: (payload, token) => request("/api/account", { method: "DELETE", body: payload, token }),
 };

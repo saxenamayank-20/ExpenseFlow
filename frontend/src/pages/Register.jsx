@@ -3,7 +3,6 @@ import { Link, useNavigate } from "react-router-dom";
 import { Wallet, Eye, EyeOff, UserPlus, User, UserRound, Lock } from "lucide-react";
 import toast from "react-hot-toast";
 import { useAuth } from "../context/AuthContext";
-import RecoveryCodeBox from "../components/RecoveryCodeBox";
 
 export default function Register() {
   const { register } = useAuth();
@@ -16,8 +15,6 @@ export default function Register() {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  // shown once after sign up, before going to the dashboard
-  const [recoveryCode, setRecoveryCode] = useState("");
 
   const update = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
 
@@ -34,7 +31,7 @@ export default function Register() {
       } else {
         toast.success("Account created!");
       }
-      setRecoveryCode(data.recovery_code);
+      navigate("/dashboard");
     } catch (err) {
       toast.error(err.message);
     } finally {
@@ -73,22 +70,6 @@ export default function Register() {
             <span className="text-xl font-semibold text-slate-800 dark:text-slate-100">ExpenseFlow</span>
           </div>
 
-          {recoveryCode ? (
-            <div>
-              <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-1">Save your recovery code</h2>
-              <p className="text-slate-500 dark:text-slate-400 mb-6">
-                If you ever forget your password, you will need your username and this code to reset it.
-              </p>
-              <RecoveryCodeBox code={recoveryCode} />
-              <button
-                onClick={() => navigate("/dashboard")}
-                className="w-full mt-6 rounded-xl bg-brand-gradient text-white font-medium py-2.5 shadow-glow hover:opacity-90 active:scale-[0.99] transition"
-              >
-                I have saved it, continue
-              </button>
-            </div>
-          ) : (
-          <>
           <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-1">Create your account</h2>
           <p className="text-slate-500 dark:text-slate-400 mb-8">Takes less than a minute.</p>
 
@@ -174,8 +155,6 @@ export default function Register() {
               Log in
             </Link>
           </p>
-          </>
-          )}
         </div>
       </div>
     </div>

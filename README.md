@@ -17,7 +17,6 @@ I get paid once a month, and in a normal expense list every month blurs into one
 - Overview with a date range picker, spending by category, daily and monthly charts, and a few quick insights (top category, biggest expense, this month vs last).
 - History table with search, category filter, sorting and CSV export.
 - Accounts with username and password (bcrypt + JWT). Each user only sees their own data.
-- Forgot password works with a one-time recovery code you get at sign up (there's no email), and you can make a new one from My Account.
 - Dark mode and saved defaults for category and payment method.
 
 ## Tech stack
@@ -88,8 +87,7 @@ All routes except auth and `/api/meta` need a `Bearer` token.
 | GET | `/api/meta` | Categories and payment methods |
 | POST | `/api/auth/register` | Create an account |
 | POST | `/api/auth/login` | Log in, returns a token |
-| POST | `/api/auth/forgot-password` | Reset password with username + recovery code |
-| POST | `/api/auth/recovery-code` | Make a new recovery code (needs current password) |
+| POST | `/api/auth/forgot-password` | Reset password by username |
 | GET | `/api/auth/me` | Current user |
 | PUT | `/api/auth/password` | Change password |
 | GET | `/api/expenses` | List my expenses |
@@ -120,5 +118,6 @@ docs/        screenshot
 ## Known limitations and what's next
 
 - Render's free plan sleeps, so the first load after a while is slow.
+- Forgot password only asks for the username, so anyone who knows it can reset the password. This needs a proper check.
 - No automated tests yet.
 - Amounts are always shown in ₹.

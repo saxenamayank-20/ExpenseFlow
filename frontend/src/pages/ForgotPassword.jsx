@@ -1,16 +1,12 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Wallet, Eye, EyeOff, User, Lock, KeyRound, ShieldCheck } from "lucide-react";
+import { Wallet, Eye, EyeOff, User, Lock, KeyRound } from "lucide-react";
 import toast from "react-hot-toast";
 import { api } from "../api";
-import RecoveryCodeBox from "../components/RecoveryCodeBox";
 
 export default function ForgotPassword() {
   const navigate = useNavigate();
   const [username, setUsername] = useState("");
-  const [recoveryCode, setRecoveryCode] = useState("");
-  // the old code is used up after a reset, this holds the new one
-  const [newCode, setNewCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showNew, setShowNew] = useState(false);
@@ -21,14 +17,13 @@ export default function ForgotPassword() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const data = await api.forgotPassword({
+      await api.forgotPassword({
         username: username.trim(),
-        recovery_code: recoveryCode,
         new_password: newPassword,
         confirm_password: confirmPassword,
       });
       toast.success("Password reset! You can log in with your new password now.");
-      setNewCode(data.recovery_code);
+      navigate("/login");
     } catch (err) {
       toast.error(err.message);
     } finally {
@@ -50,7 +45,8 @@ export default function ForgotPassword() {
           </div>
           <h1 className="text-4xl font-bold leading-tight mb-4">Locked out? Let's fix that.</h1>
           <p className="text-white/80 text-lg">
-            Use the recovery code you saved when you signed up and set a new password.
+            Confirm your username and set a new password — you'll be back into your dashboard in
+            seconds.
           </p>
         </div>
       </div>
@@ -64,25 +60,9 @@ export default function ForgotPassword() {
             <span className="text-xl font-semibold text-slate-800 dark:text-slate-100">ExpenseFlow</span>
           </div>
 
-          {newCode ? (
-            <div>
-              <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-1">Password reset</h2>
-              <p className="text-slate-500 dark:text-slate-400 mb-6">
-                Your old recovery code no longer works. Here is your new one.
-              </p>
-              <RecoveryCodeBox code={newCode} />
-              <button
-                onClick={() => navigate("/login")}
-                className="w-full mt-6 rounded-xl bg-brand-gradient text-white font-medium py-2.5 shadow-glow hover:opacity-90 active:scale-[0.99] transition"
-              >
-                I have saved it, go to log in
-              </button>
-            </div>
-          ) : (
-          <>
           <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-1">Reset your password</h2>
           <p className="text-slate-500 dark:text-slate-400 mb-8">
-            Enter your username, the recovery code you saved at sign up, and a new password.
+            No email on file — just confirm your username and pick a new password.
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -97,21 +77,6 @@ export default function ForgotPassword() {
                   onChange={(e) => setUsername(e.target.value)}
                   className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 pl-10 pr-4 py-2.5 text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition"
                   placeholder="yourname"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Recovery code</label>
-              <div className="relative">
-                <ShieldCheck className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input
-                  type="text"
-                  required
-                  autoComplete="off"
-                  value={recoveryCode}
-                  onChange={(e) => setRecoveryCode(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 pl-10 pr-4 py-2.5 text-slate-900 dark:text-slate-100 uppercase tracking-wider outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition"
-                  placeholder="XXXX-XXXX-XXXX"
                 />
               </div>
             </div>
@@ -174,8 +139,6 @@ export default function ForgotPassword() {
               Back to log in
             </Link>
           </p>
-          </>
-          )}
         </div>
       </div>
     </div>
