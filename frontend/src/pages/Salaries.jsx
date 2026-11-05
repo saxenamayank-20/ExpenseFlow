@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Banknote, Plus, ChevronRight, PiggyBank } from "lucide-react";
+import { Banknote, Plus, ChevronRight, PiggyBank, Pencil } from "lucide-react";
 import toast from "react-hot-toast";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../api";
@@ -129,12 +129,21 @@ export default function Salaries() {
                   {formatPretty(current.received_date)} – {current.end_date ? formatPretty(current.end_date) : "next salary"}
                 </p>
               </div>
-              <Link
-                to={`/salaries/${current.id}`}
-                className="text-sm font-medium text-brand-600 dark:text-brand-400 hover:underline whitespace-nowrap"
-              >
-                View expenses
-              </Link>
+              <div className="flex items-center gap-3 shrink-0">
+                <Link
+                  to={`/salaries/${current.id}?edit=1`}
+                  className="flex items-center gap-1 text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  Edit
+                </Link>
+                <Link
+                  to={`/salaries/${current.id}`}
+                  className="text-sm font-medium text-brand-600 dark:text-brand-400 hover:underline whitespace-nowrap"
+                >
+                  View expenses
+                </Link>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
@@ -242,12 +251,21 @@ export default function Salaries() {
                     <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 truncate">{s.label}</h3>
                     <p className="text-sm text-slate-500 dark:text-slate-400">Since {formatPretty(s.received_date)}</p>
                   </div>
-                  <Link
-                    to={`/salaries/${s.id}`}
-                    className="text-sm font-medium text-brand-600 dark:text-brand-400 hover:underline whitespace-nowrap"
-                  >
-                    View expenses
-                  </Link>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <Link
+                      to={`/salaries/${s.id}?edit=1`}
+                      className="flex items-center gap-1 text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                      Edit
+                    </Link>
+                    <Link
+                      to={`/salaries/${s.id}`}
+                      className="text-sm font-medium text-brand-600 dark:text-brand-400 hover:underline whitespace-nowrap"
+                    >
+                      View expenses
+                    </Link>
+                  </div>
                 </div>
                 <div className="grid grid-cols-3 gap-3 mb-4">
                   <Figure label="Amount" value={currency(s.amount)} />

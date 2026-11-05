@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Banknote, Wallet, PiggyBank, Pencil, Trash2, Save, X, ArrowDownLeft, Receipt, CircleCheck, RotateCcw } from "lucide-react";
 import toast from "react-hot-toast";
 import { useAuth } from "../context/AuthContext";
@@ -27,6 +27,7 @@ export default function SalaryDetail() {
   const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editForm, setEditForm] = useState(null);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const load = async () => {
     try {
@@ -46,6 +47,14 @@ export default function SalaryDetail() {
   }, [salaryId]);
 
   const salary = salaries.find((s) => s.id === salaryId);
+
+  // ?edit=1 comes from the Edit link on the salaries page. open the form once, then drop the param
+  useEffect(() => {
+    if (salary && searchParams.get("edit") === "1") {
+      setEditForm({ label: salary.label, amount: String(salary.amount), received_date: salary.received_date });
+      setSearchParams({}, { replace: true });
+    }
+  }, [salary, searchParams, setSearchParams]);
   const rows = useMemo(
     () => (salary ? expenses.filter((e) => belongsTo(salary, e)) : []),
     [expenses, salary]
