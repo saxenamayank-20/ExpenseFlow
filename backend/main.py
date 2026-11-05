@@ -6,6 +6,8 @@ from pathlib import Path
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from typing import Optional
+
 from pydantic import BaseModel
 
 import db
@@ -97,12 +99,15 @@ class ExpenseIn(BaseModel):
     category: str
     description: str
     payment_method: str
+    # id of an 'other' amount, None = the salary for that date
+    source_id: Optional[int] = None
 
 
 class SalaryIn(BaseModel):
     label: str
     amount: float
     received_date: str
+    kind: str = "salary"
 
 
 class PasswordChangeRequest(BaseModel):
@@ -198,15 +203,28 @@ def list_expenses(current_user=Depends(get_current_user)):
     return db.get_expenses(current_user["id"])
 
 
+def check_source(user_id, source_id, allow_finished):
+    if source_id is None:
+        return
+    source = db.get_salary(user_id, source_id)
+    if not source or source["kind"] != "other":
+        raise HTTPException(status_code=400, detail="That amount was not found.")
+    # new expenses only go to running amounts, edits can still point at a finished one
+    if source["finished"] and not allow_finished:
+        raise HTTPException(status_code=400, detail=f"\"{source['label']}\" is finished.")
+
+
 @app.post("/api/expenses")
 def create_expense(payload: ExpenseIn, current_user=Depends(get_current_user)):
     if payload.amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be greater than 0.")
     if not payload.description.strip():
         raise HTTPException(status_code=400, detail="Description is required.")
+    check_source(current_user["id"], payload.source_id, allow_finished=False)
     db.add_expense(
         current_user["id"], payload.expense_date, payload.amount,
         payload.category, payload.description.strip(), payload.payment_method,
+        payload.source_id,
     )
     return {"success": True}
 
@@ -215,9 +233,11 @@ def create_expense(payload: ExpenseIn, current_user=Depends(get_current_user)):
 def edit_expense(expense_id: int, payload: ExpenseIn, current_user=Depends(get_current_user)):
     if payload.amount <= 0 or not payload.description.strip():
         raise HTTPException(status_code=400, detail="Amount and description are required.")
+    check_source(current_user["id"], payload.source_id, allow_finished=True)
     db.update_expense(
         current_user["id"], expense_id, payload.expense_date, payload.amount,
         payload.category, payload.description.strip(), payload.payment_method,
+        payload.source_id,
     )
     return {"success": True}
 
@@ -228,9 +248,9 @@ def remove_expense(expense_id: int, current_user=Depends(get_current_user)):
     return {"success": True}
 
 
-def check_salary(user_id, payload: SalaryIn, salary_id=None):
+def check_salary(user_id, payload: SalaryIn, kind, salary_id=None):
     if not payload.label.strip():
-        raise HTTPException(status_code=400, detail="Please give the salary a name.")
+        raise HTTPException(status_code=400, detail="Please give it a name.")
     if payload.amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be greater than 0.")
     # periods are matched by comparing date strings, so the format has to be exact
@@ -240,7 +260,8 @@ def check_salary(user_id, payload: SalaryIn, salary_id=None):
         ok = False
     if not ok:
         raise HTTPException(status_code=400, detail="Date must look like YYYY-MM-DD.")
-    if db.salary_on_date(user_id, payload.received_date, salary_id):
+    # only salaries split the timeline, other amounts can share a date
+    if kind == "salary" and db.salary_on_date(user_id, payload.received_date, salary_id):
         raise HTTPException(status_code=400, detail="You already have a salary on that date.")
 
 
@@ -262,25 +283,55 @@ def list_salaries(current_user=Depends(get_current_user)):
         )
         s["available"] = s["amount"] + s["carried_over"]
         s["left"] = s["available"] - s["spent"]
-    return salaries
+        s["kind"] = "salary"
+        s["finished"] = False
+    others = db.get_other_amounts(current_user["id"])
+    for o in others:
+        # no periods or carry over, just amount minus what was picked for it
+        o.update(kind="other", end_date=None, carried_over=0, available=o["amount"], left=o["amount"] - o["spent"])
+    # salaries first (newest first) so the frontend can find the one for a date easily
+    return salaries + others
 
 
 @app.post("/api/salaries")
 def create_salary(payload: SalaryIn, current_user=Depends(get_current_user)):
-    check_salary(current_user["id"], payload)
+    if payload.kind not in ("salary", "other"):
+        raise HTTPException(status_code=400, detail="Kind must be salary or other.")
+    check_salary(current_user["id"], payload, payload.kind)
     salary_id = db.add_salary(
-        current_user["id"], payload.label.strip(), payload.amount, payload.received_date
+        current_user["id"], payload.label.strip(), payload.amount, payload.received_date, payload.kind
     )
     return {"success": True, "id": salary_id}
 
 
 @app.put("/api/salaries/{salary_id}")
 def edit_salary(salary_id: int, payload: SalaryIn, current_user=Depends(get_current_user)):
-    own_salary(current_user["id"], salary_id)
-    check_salary(current_user["id"], payload, salary_id)
+    # kind can't change after it's made, it would move expenses around
+    salary = own_salary(current_user["id"], salary_id)
+    check_salary(current_user["id"], payload, salary["kind"], salary_id)
     db.update_salary(
         current_user["id"], salary_id, payload.label.strip(), payload.amount, payload.received_date
     )
+    return {"success": True}
+
+
+def own_other(user_id, salary_id):
+    salary = own_salary(user_id, salary_id)
+    if salary["kind"] != "other":
+        raise HTTPException(status_code=400, detail="Only other amounts can be finished.")
+
+
+@app.post("/api/salaries/{salary_id}/finish")
+def finish_other(salary_id: int, current_user=Depends(get_current_user)):
+    own_other(current_user["id"], salary_id)
+    db.set_finished(current_user["id"], salary_id, True)
+    return {"success": True}
+
+
+@app.post("/api/salaries/{salary_id}/reopen")
+def reopen_other(salary_id: int, current_user=Depends(get_current_user)):
+    own_other(current_user["id"], salary_id)
+    db.set_finished(current_user["id"], salary_id, False)
     return {"success": True}
 
 

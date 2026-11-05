@@ -114,6 +114,10 @@ def init_db():
         """)
         # leftovers from the first version (manual open/close + linked expenses)
         cur.execute("ALTER TABLE salaries DROP COLUMN IF EXISTS closed_date")
+        # 'salary' = payday periods by date, 'other' = extra money that runs alongside
+        # (savings, bonus...) until you finish it
+        cur.execute("ALTER TABLE salaries ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'salary'")
+        cur.execute("ALTER TABLE salaries ADD COLUMN IF NOT EXISTS finished BOOLEAN NOT NULL DEFAULT FALSE")
 
         cur.execute("""
             SELECT column_name AS name FROM information_schema.columns
@@ -136,6 +140,11 @@ def init_db():
             )
         """)
         cur.execute("ALTER TABLE expenses DROP COLUMN IF EXISTS salary_id")
+        # set only when an expense is paid from an 'other' amount, NULL = salary by date
+        cur.execute("""
+            ALTER TABLE expenses ADD COLUMN IF NOT EXISTS
+            source_id INTEGER REFERENCES salaries(id) ON DELETE SET NULL
+        """)
 
 
 # ---------- users ----------
@@ -229,21 +238,21 @@ def claim_legacy_expenses(user_id):
 
 # ---------- expenses (always scoped to a user) ----------
 
-def add_expense(user_id, expense_date, amount, category, description, payment_method):
+def add_expense(user_id, expense_date, amount, category, description, payment_method, source_id=None):
     with get_conn() as conn:
         cur = conn.cursor()
         cur.execute("""
             INSERT INTO expenses
-            (user_id, expense_date, amount, category, description, payment_method)
-            VALUES (%s, %s, %s, %s, %s, %s)
-        """, (user_id, str(expense_date), float(amount), category, description, payment_method))
+            (user_id, expense_date, amount, category, description, payment_method, source_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (user_id, str(expense_date), float(amount), category, description, payment_method, source_id))
 
 
 def get_expenses(user_id):
     with get_conn() as conn:
         cur = conn.cursor()
         cur.execute("""
-            SELECT id, expense_date, amount, category, description, payment_method
+            SELECT id, expense_date, amount, category, description, payment_method, source_id
             FROM expenses
             WHERE user_id = %s
             ORDER BY expense_date DESC, id DESC
@@ -260,14 +269,14 @@ def delete_expense(user_id, expense_id):
         )
 
 
-def update_expense(user_id, expense_id, expense_date, amount, category, description, payment_method):
+def update_expense(user_id, expense_id, expense_date, amount, category, description, payment_method, source_id=None):
     with get_conn() as conn:
         cur = conn.cursor()
         cur.execute("""
             UPDATE expenses
-            SET expense_date=%s, amount=%s, category=%s, description=%s, payment_method=%s
+            SET expense_date=%s, amount=%s, category=%s, description=%s, payment_method=%s, source_id=%s
             WHERE id=%s AND user_id=%s
-        """, (str(expense_date), float(amount), category, description, payment_method, expense_id, user_id))
+        """, (str(expense_date), float(amount), category, description, payment_method, source_id, expense_id, user_id))
 
 
 # ---------- salaries ----------
@@ -283,13 +292,14 @@ def get_salaries(user_id):
                 SELECT id, label, amount, received_date,
                        LEAD(received_date) OVER (ORDER BY received_date, id) AS next_date
                 FROM salaries
-                WHERE user_id = %s
+                WHERE user_id = %s AND kind = 'salary'
             ), totals AS (
                 SELECT p.id, p.label, p.amount, p.received_date, p.next_date,
                        COALESCE(SUM(e.amount), 0) AS spent, COUNT(e.id) AS expense_count
                 FROM periods p
                 LEFT JOIN expenses e
                   ON e.user_id = %s
+                 AND e.source_id IS NULL
                  AND e.expense_date >= p.received_date
                  AND (p.next_date IS NULL OR e.expense_date < p.next_date)
                 GROUP BY p.id, p.label, p.amount, p.received_date, p.next_date
@@ -306,6 +316,23 @@ def get_salaries(user_id):
     return [dict(r) for r in rows]
 
 
+def get_other_amounts(user_id):
+    # these don't follow paydays, they only count expenses picked for them
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT s.id, s.label, s.amount, s.received_date, s.finished,
+                   COALESCE(SUM(e.amount), 0) AS spent, COUNT(e.id) AS expense_count
+            FROM salaries s
+            LEFT JOIN expenses e ON e.source_id = s.id
+            WHERE s.user_id = %s AND s.kind = 'other'
+            GROUP BY s.id
+            ORDER BY s.received_date DESC, s.id DESC
+        """, (user_id,))
+        rows = cur.fetchall()
+    return [dict(r) for r in rows]
+
+
 def get_salary(user_id, salary_id):
     with get_conn() as conn:
         cur = conn.cursor()
@@ -317,24 +344,24 @@ def get_salary(user_id, salary_id):
 
 
 def salary_on_date(user_id, received_date, skip_id=None):
-    # two salaries on the same day would make an empty period
+    # two salaries on the same day would make an empty period (other amounts don't matter here)
     with get_conn() as conn:
         cur = conn.cursor()
         cur.execute("""
             SELECT id FROM salaries
-            WHERE user_id = %s AND received_date = %s AND id IS DISTINCT FROM %s
+            WHERE user_id = %s AND kind = 'salary' AND received_date = %s AND id IS DISTINCT FROM %s
         """, (user_id, str(received_date), skip_id))
         return cur.fetchone() is not None
 
 
-def add_salary(user_id, label, amount, received_date):
+def add_salary(user_id, label, amount, received_date, kind="salary"):
     with get_conn() as conn:
         cur = conn.cursor()
         cur.execute("""
-            INSERT INTO salaries (user_id, label, amount, received_date)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO salaries (user_id, label, amount, received_date, kind)
+            VALUES (%s, %s, %s, %s, %s)
             RETURNING id
-        """, (user_id, label, float(amount), str(received_date)))
+        """, (user_id, label, float(amount), str(received_date), kind))
         return cur.fetchone()["id"]
 
 
@@ -347,8 +374,18 @@ def update_salary(user_id, salary_id, label, amount, received_date):
         """, (label, float(amount), str(received_date), salary_id, user_id))
 
 
+def set_finished(user_id, salary_id, finished):
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE salaries SET finished = %s WHERE id = %s AND user_id = %s",
+            (finished, salary_id, user_id),
+        )
+
+
 def delete_salary(user_id, salary_id):
-    # expenses aren't touched, they just fall into the previous salary by date
+    # salary: its expenses fall into the previous salary by date.
+    # other amount: source_id goes back to NULL so they land on the salary for their date
     with get_conn() as conn:
         cur = conn.cursor()
         cur.execute(

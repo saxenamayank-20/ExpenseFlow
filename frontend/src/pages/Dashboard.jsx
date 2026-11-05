@@ -9,7 +9,7 @@ import StatCard from "../components/StatCard";
 import DatePicker from "../components/DatePicker";
 import DateRangePicker from "../components/DateRangePicker";
 import SalaryBar from "../components/SalaryBar";
-import { salaryForDate } from "../lib/salary";
+import { salaryForDate, runningOthers } from "../lib/salary";
 import { toISO } from "../lib/date";
 import { useExpenseData, useDateRange, currency } from "../lib/useExpenseData";
 
@@ -46,6 +46,8 @@ export default function Dashboard() {
     category: "",
     description: "",
     payment_method: "",
+    // "" = the salary for the date, otherwise the id of a running other amount
+    source_id: "",
   });
   const [addSubmitting, setAddSubmitting] = useState(false);
 
@@ -65,8 +67,12 @@ export default function Dashboard() {
   }, [meta]);
 
   const activeSalary = salaryForDate(salaries, toISO(new Date()));
+  const running = runningOthers(salaries);
   // the salary a new expense will land in, based on the date picked
   const addSalary = salaryForDate(salaries, addForm.expense_date);
+  // or the other amount picked in "paid from"
+  const addSource = running.find((s) => String(s.id) === addForm.source_id) || null;
+  const addTarget = addSource || addSalary;
 
   const total = dateFiltered.reduce((s, e) => s + e.amount, 0);
   const count = dateFiltered.length;
@@ -149,7 +155,12 @@ export default function Dashboard() {
     setAddSubmitting(true);
     try {
       await api.addExpense(
-        { ...addForm, amount: Number(addForm.amount), description: addForm.description.trim() },
+        {
+          ...addForm,
+          amount: Number(addForm.amount),
+          description: addForm.description.trim(),
+          source_id: addSource ? addSource.id : null,
+        },
         token
       );
       toast.success("Expense added!");
@@ -213,32 +224,35 @@ export default function Dashboard() {
 
       {tab === "overview" && (
         <div>
-          {activeSalary && (
+          {/* current salary and any other amounts running next to it */}
+          {[activeSalary, ...running].filter(Boolean).map((s) => (
             <Link
-              to={`/salaries/${activeSalary.id}`}
-              className="block bg-white dark:bg-slate-900 rounded-2xl shadow-card p-4 mb-6 hover:shadow-lg transition"
+              key={s.id}
+              to={`/salaries/${s.id}`}
+              className="block bg-white dark:bg-slate-900 rounded-2xl shadow-card p-4 mb-4 last-of-type:mb-6 hover:shadow-lg transition"
             >
               <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                 <div className="flex items-center gap-2 min-w-0">
                   <Banknote className="w-4 h-4 text-brand-600 dark:text-brand-400 shrink-0" />
-                  <span className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{activeSalary.label}</span>
+                  <span className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{s.label}</span>
+                  {s.kind === "other" && (
+                    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+                      Other amount
+                    </span>
+                  )}
                 </div>
                 <span className="text-sm text-slate-500 dark:text-slate-400">
-                  {currency(activeSalary.spent)} of {currency(activeSalary.available)} spent ·{" "}
+                  {currency(s.spent)} of {currency(s.available)} spent ·{" "}
                   <span
-                    className={
-                      activeSalary.left < 0
-                        ? "text-red-500 font-medium"
-                        : "text-green-600 dark:text-green-400 font-medium"
-                    }
+                    className={s.left < 0 ? "text-red-500 font-medium" : "text-green-600 dark:text-green-400 font-medium"}
                   >
-                    {currency(activeSalary.left)} left
+                    {currency(s.left)} left
                   </span>
                 </span>
               </div>
-              <SalaryBar amount={activeSalary.available} spent={activeSalary.spent} />
+              <SalaryBar amount={s.available} spent={s.spent} />
             </Link>
-          )}
+          ))}
 
           <div className="flex flex-wrap items-center gap-3 bg-white dark:bg-slate-900 rounded-2xl shadow-card p-4 mb-6">
             <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Showing expenses for</span>
@@ -285,12 +299,12 @@ export default function Dashboard() {
       {tab === "add" && (
         <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-card p-6 max-w-lg">
           <h3 className="font-semibold text-slate-800 dark:text-slate-100 mb-4">Add a new expense</h3>
-          {addSalary ? (
+          {addTarget ? (
             <div className="flex items-center gap-2 rounded-xl bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 text-sm px-4 py-2.5 mb-4">
               <Banknote className="w-4 h-4 shrink-0" />
               <span>
-                Goes into <span className="font-semibold">{addSalary.label}</span> ·{" "}
-                {currency(addSalary.left)} left
+                Goes into <span className="font-semibold">{addTarget.label}</span> ·{" "}
+                {currency(addTarget.left)} left
               </span>
             </div>
           ) : (
@@ -302,6 +316,23 @@ export default function Dashboard() {
             </div>
           )}
           <form onSubmit={handleAddSubmit} className="space-y-4">
+            {running.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Paid from</label>
+                <select
+                  value={addSource ? addForm.source_id : ""}
+                  onChange={(e) => setAddForm((f) => ({ ...f, source_id: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-4 py-2.5 outline-none focus:ring-2 focus:ring-brand-500"
+                >
+                  <option value="">{addSalary ? `${addSalary.label} (salary)` : "Salary"}</option>
+                  {running.map((s) => (
+                    <option key={s.id} value={String(s.id)}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Date</label>
               <DatePicker

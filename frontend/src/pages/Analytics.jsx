@@ -90,7 +90,7 @@ export default function Analytics() {
   const salaryData = useMemo(() => {
     const today = toISO(new Date());
     return salaries
-      .filter((s) => s.received_date <= today)
+      .filter((s) => s.kind !== "other" && s.received_date <= today)
       .reverse()
       .map((s) => ({
         name: s.label.replace(/ salary$/i, ""),

@@ -12,7 +12,8 @@ I get paid once a month, and in a normal expense list every month blurs into one
 
 - Add a salary every payday. It covers everything you spend from that day until the next salary, so expenses land in the right one by their date (past salaries work too).
 - Whatever is left from a salary carries over into the next one, and overspending gets taken out of it.
-- Salary history shows each salary's amount, spent and saved. Click one to see all of its expenses and a category breakdown.
+- Other amounts (savings, a bonus, money from family) can run next to the salary. When one is running, Add Expense asks what you're paying from, and those expenses only count against that amount. Finish it when it's used up.
+- History on the Salaries page shows each salary and finished amount with what was spent and saved. Click one to see all of its expenses and a category breakdown.
 - **Dashboard:** current salary, a date range picker, quick insights (top category, biggest expense, this month vs last), totals, and the Add Expense form.
 - **Analytics:** spending by category, daily and monthly charts, and salary vs spent for every salary. Each chart has a short note on what it shows and a takeaway from your data.
 - **History:** every expense with search, category filter, sorting, CSV export, and edit/delete.
@@ -92,13 +93,15 @@ All routes except auth, `/api/meta` and `/api/health` need a `Bearer` token.
 | GET | `/api/auth/me` | Current user |
 | PUT | `/api/auth/password` | Change password |
 | GET | `/api/expenses` | List my expenses |
-| POST | `/api/expenses` | Add an expense |
-| PUT | `/api/expenses/{id}` | Edit an expense |
+| POST | `/api/expenses` | Add an expense (optional `source_id` = an other amount) |
+| PUT | `/api/expenses/{id}` | Edit an expense or what it was paid from |
 | DELETE | `/api/expenses/{id}` | Delete an expense |
-| GET | `/api/salaries` | List salaries with their period, spent, carried over and left |
-| POST | `/api/salaries` | Add a salary |
+| GET | `/api/salaries` | List salaries and other amounts with spent, carried over and left |
+| POST | `/api/salaries` | Add a salary or other amount (`kind`: `salary` / `other`) |
 | PUT | `/api/salaries/{id}` | Edit name, amount or date |
-| DELETE | `/api/salaries/{id}` | Delete a salary (its expenses fall into the one before) |
+| POST | `/api/salaries/{id}/finish` | Finish an other amount |
+| POST | `/api/salaries/{id}/reopen` | Reopen a finished other amount |
+| DELETE | `/api/salaries/{id}` | Delete a salary or amount (its expenses are kept) |
 | GET | `/api/account/stats` | Totals for the account page |
 | DELETE | `/api/account` | Delete my account and all its data |
 

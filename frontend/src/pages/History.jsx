@@ -4,7 +4,7 @@ import toast from "react-hot-toast";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../api";
 import DatePicker from "../components/DatePicker";
-import { salaryForDate } from "../lib/salary";
+import { paidFrom, salaryForDate } from "../lib/salary";
 import { useExpenseData, currency } from "../lib/useExpenseData";
 
 const HISTORY_COLUMNS = [
@@ -13,7 +13,7 @@ const HISTORY_COLUMNS = [
   { key: "category", label: "Category" },
   { key: "description", label: "Description" },
   { key: "payment_method", label: "Payment Method" },
-  { key: "salary_label", label: "Salary" },
+  { key: "salary_label", label: "Paid from" },
 ];
 
 export default function History() {
@@ -28,9 +28,12 @@ export default function History() {
   const [selectedId, setSelectedId] = useState(null);
   const [editForm, setEditForm] = useState(null);
 
-  // which salary each expense falls in, worked out from its date
+  // every other amount, finished ones too, so a wrong pick can still be fixed
+  const others = salaries.filter((s) => s.kind === "other");
+
+  // where each expense's money came from: the amount it was paid from, or the salary for its date
   const expensesWithSalary = useMemo(
-    () => expenses.map((e) => ({ ...e, salary_label: salaryForDate(salaries, e.expense_date)?.label || "" })),
+    () => expenses.map((e) => ({ ...e, salary_label: paidFrom(salaries, e)?.label || "" })),
     [expenses, salaries]
   );
 
@@ -109,7 +112,7 @@ export default function History() {
   };
 
   const exportCsv = () => {
-    const header = ["Date", "Amount", "Category", "Description", "Payment Method", "Salary"];
+    const header = ["Date", "Amount", "Category", "Description", "Payment Method", "Paid from"];
     const rows = historySorted.map((e) => [e.expense_date, e.amount, e.category, e.description, e.payment_method, e.salary_label]);
     const csv = [header, ...rows].map((r) => r.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -299,6 +302,28 @@ export default function History() {
                       ))}
                     </select>
                   </div>
+                  {others.length > 0 && (
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Paid from</label>
+                      <select
+                        value={editForm.source_id ?? ""}
+                        onChange={(e) =>
+                          setEditForm((f) => ({ ...f, source_id: e.target.value ? Number(e.target.value) : null }))
+                        }
+                        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-4 py-2.5 outline-none focus:ring-2 focus:ring-brand-500"
+                      >
+                        <option value="">
+                          {salaryForDate(salaries, editForm.expense_date)?.label || "Salary"} (salary, by date)
+                        </option>
+                        {others.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.label}
+                            {s.finished ? " (finished)" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                   <div className="flex gap-3">
                     <button
                       type="submit"

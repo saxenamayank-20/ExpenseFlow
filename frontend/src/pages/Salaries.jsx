@@ -7,7 +7,7 @@ import { api } from "../api";
 import { MONTH_NAMES, toISO, formatPretty } from "../lib/date";
 import DatePicker from "../components/DatePicker";
 import SalaryBar from "../components/SalaryBar";
-import { salaryForDate } from "../lib/salary";
+import { salaryForDate, runningOthers } from "../lib/salary";
 
 function currency(n) {
   return `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
@@ -18,6 +18,26 @@ function defaultLabel() {
   return `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()} Salary`;
 }
 
+const emptyForm = (kind = "salary") => ({
+  kind,
+  label: kind === "salary" ? defaultLabel() : "",
+  amount: "",
+  received_date: toISO(new Date()),
+});
+
+// small amount / spent / left block, used on the cards
+function Figure({ label, value, tone = "" }) {
+  return (
+    <div>
+      <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
+      <p className={`text-lg font-bold ${tone || "text-slate-900 dark:text-slate-100"}`}>{value}</p>
+    </div>
+  );
+}
+
+const leftTone = (n) => (n < 0 ? "text-red-500" : "text-green-600 dark:text-green-400");
+const signed = (n) => `${n < 0 ? "-" : ""}${currency(Math.abs(n))}`;
+
 const inputClass =
   "w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-4 py-2.5 outline-none focus:ring-2 focus:ring-brand-500";
 
@@ -25,7 +45,7 @@ export default function Salaries() {
   const { token } = useAuth();
   const [salaries, setSalaries] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ label: defaultLabel(), amount: "", received_date: toISO(new Date()) });
+  const [form, setForm] = useState(emptyForm());
   const [submitting, setSubmitting] = useState(false);
 
   const loadSalaries = async () => {
@@ -45,12 +65,15 @@ export default function Salaries() {
 
   const today = toISO(new Date());
   const current = salaryForDate(salaries, today);
-  const others = salaries.filter((s) => s !== current);
+  // extra money running next to the salary right now
+  const running = runningOthers(salaries);
+  const history = salaries.filter((s) => s !== current && !running.includes(s));
+  const isOther = form.kind === "other";
 
   const handleStart = async (e) => {
     e.preventDefault();
     if (!form.label.trim()) {
-      toast.error("Please give the salary a name.");
+      toast.error(isOther ? "Please write what this amount is." : "Please give the salary a name.");
       return;
     }
     if (Number(form.amount) <= 0) {
@@ -60,8 +83,8 @@ export default function Salaries() {
     setSubmitting(true);
     try {
       await api.startSalary({ ...form, label: form.label.trim(), amount: Number(form.amount) }, token);
-      toast.success("Salary added!");
-      setForm({ label: defaultLabel(), amount: "", received_date: toISO(new Date()) });
+      toast.success(isOther ? "Amount added!" : "Salary added!");
+      setForm(emptyForm(form.kind));
       await loadSalaries();
     } catch (err) {
       toast.error(err.message);
@@ -89,7 +112,7 @@ export default function Salaries() {
         <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Salaries</h1>
       </div>
       <p className="text-slate-500 dark:text-slate-400 mb-6 ml-[3.25rem]">
-        Each salary keeps its own expenses, so months never get mixed up.
+        Each salary and each extra amount keeps its own expenses, so nothing gets mixed up.
       </p>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-5 items-start mb-8">
@@ -115,28 +138,10 @@ export default function Salaries() {
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-              <div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Salary</p>
-                <p className="text-lg font-bold text-slate-900 dark:text-slate-100">{currency(current.amount)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Carried over</p>
-                <p className={`text-lg font-bold ${current.carried_over < 0 ? "text-red-500" : "text-slate-900 dark:text-slate-100"}`}>
-                  {current.carried_over < 0 ? "-" : ""}
-                  {currency(Math.abs(current.carried_over))}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Spent</p>
-                <p className="text-lg font-bold text-slate-900 dark:text-slate-100">{currency(current.spent)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Left</p>
-                <p className={`text-lg font-bold ${current.left < 0 ? "text-red-500" : "text-green-600 dark:text-green-400"}`}>
-                  {current.left < 0 ? "-" : ""}
-                  {currency(Math.abs(current.left))}
-                </p>
-              </div>
+              <Figure label="Salary" value={currency(current.amount)} />
+              <Figure label="Carried over" value={signed(current.carried_over)} tone={current.carried_over < 0 ? "text-red-500" : ""} />
+              <Figure label="Spent" value={currency(current.spent)} />
+              <Figure label="Left" value={signed(current.left)} tone={leftTone(current.left)} />
             </div>
 
             <SalaryBar amount={current.available} spent={current.spent} />
@@ -153,18 +158,42 @@ export default function Salaries() {
 
         {/* start a new one */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-card p-6">
-          <h3 className="font-semibold text-slate-800 dark:text-slate-100 mb-1">Add salary</h3>
+          <h3 className="font-semibold text-slate-800 dark:text-slate-100 mb-3">Add money</h3>
+          <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl p-1 mb-2">
+            {[
+              { kind: "salary", label: "Salary" },
+              { kind: "other", label: "Other amount" },
+            ].map((k) => (
+              <button
+                key={k.kind}
+                type="button"
+                onClick={() => setForm(emptyForm(k.kind))}
+                className={`flex-1 rounded-lg py-1.5 text-sm font-medium transition ${
+                  form.kind === k.kind
+                    ? "bg-white dark:bg-slate-900 text-brand-700 dark:text-brand-300 shadow-sm"
+                    : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
+                }`}
+              >
+                {k.label}
+              </button>
+            ))}
+          </div>
           <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-            It covers every expense from this date until your next salary. Past salaries work too.
+            {isOther
+              ? "Savings, a bonus, money from family... It runs next to your salary, and you pick it when adding an expense."
+              : "It covers every expense from this date until your next salary. Past salaries work too."}
           </p>
           <form onSubmit={handleStart} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Name</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                {isOther ? "What is this amount?" : "Name"}
+              </label>
               <input
                 type="text"
                 value={form.label}
                 onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
                 className={inputClass}
+                placeholder={isOther ? "e.g. Savings, Diwali bonus, Freelance" : ""}
               />
             </div>
             <div>
@@ -189,24 +218,59 @@ export default function Salaries() {
               className="w-full flex items-center justify-center gap-2 rounded-xl bg-brand-gradient text-white font-medium py-2.5 shadow-glow hover:opacity-90 active:scale-[0.99] transition disabled:opacity-60"
             >
               <Plus className="w-4 h-4" />
-              {submitting ? "Adding..." : "Add Salary"}
+              {submitting ? "Adding..." : isOther ? "Add Amount" : "Add Salary"}
             </button>
           </form>
         </div>
       </div>
 
-      {/* every other salary */}
-      <h2 className="font-semibold text-slate-800 dark:text-slate-100 mb-3">Salary history</h2>
-      {!others.length ? (
+      {/* other amounts running alongside the salary */}
+      {running.length > 0 && (
+        <>
+          <h2 className="font-semibold text-slate-800 dark:text-slate-100 mb-3">Running alongside your salary</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
+            {running.map((s) => (
+              <div key={s.id} className="bg-white dark:bg-slate-900 rounded-2xl shadow-card p-6">
+                <div className="flex items-start justify-between gap-3 mb-4">
+                  <div className="min-w-0">
+                    <span className="inline-block text-xs font-medium px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 mb-1.5">
+                      Other amount
+                    </span>
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 truncate">{s.label}</h3>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">Since {formatPretty(s.received_date)}</p>
+                  </div>
+                  <Link
+                    to={`/salaries/${s.id}`}
+                    className="text-sm font-medium text-brand-600 dark:text-brand-400 hover:underline whitespace-nowrap"
+                  >
+                    View expenses
+                  </Link>
+                </div>
+                <div className="grid grid-cols-3 gap-3 mb-4">
+                  <Figure label="Amount" value={currency(s.amount)} />
+                  <Figure label="Spent" value={currency(s.spent)} />
+                  <Figure label="Left" value={signed(s.left)} tone={leftTone(s.left)} />
+                </div>
+                <SalaryBar amount={s.amount} spent={s.spent} />
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* older salaries and finished amounts */}
+      <h2 className="font-semibold text-slate-800 dark:text-slate-100 mb-3">History</h2>
+      {!history.length ? (
         <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-card p-10 text-center text-slate-400">
-          Older salaries show up here.
+          Older salaries and finished amounts show up here.
         </div>
       ) : (
         <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-card overflow-hidden">
-          {others.map((s) => {
-            // just this salary, without what was carried in
+          {history.map((s) => {
+            // just this one, without what was carried in
             const left = s.amount - s.spent;
             const upcoming = s.received_date > today;
+            const other = s.kind === "other";
             return (
               <Link
                 key={s.id}
@@ -216,15 +280,22 @@ export default function Salaries() {
                 <div className="min-w-0 flex-1">
                   <p className="font-medium text-slate-900 dark:text-slate-100 truncate">
                     {s.label}
-                    {upcoming && <span className="ml-2 text-xs font-normal text-slate-400">upcoming</span>}
+                    {other && (
+                      <span className="ml-2 text-xs font-medium px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+                        Other amount
+                      </span>
+                    )}
+                    {upcoming && !other && <span className="ml-2 text-xs font-normal text-slate-400">upcoming</span>}
                   </p>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    {formatPretty(s.received_date)} – {s.end_date ? formatPretty(s.end_date) : "next salary"} ·{" "}
-                    {s.expense_count} expenses
+                    {other
+                      ? `Since ${formatPretty(s.received_date)} · finished`
+                      : `${formatPretty(s.received_date)} – ${s.end_date ? formatPretty(s.end_date) : "next salary"}`}{" "}
+                    · {s.expense_count} expenses
                   </p>
                 </div>
                 <div className="text-right hidden sm:block">
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Salary</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">{other ? "Amount" : "Salary"}</p>
                   <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{currency(s.amount)}</p>
                 </div>
                 <div className="text-right hidden sm:block">

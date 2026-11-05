@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Banknote, Wallet, PiggyBank, Pencil, Trash2, Save, X, ArrowDownLeft } from "lucide-react";
+import { ArrowLeft, Banknote, Wallet, PiggyBank, Pencil, Trash2, Save, X, ArrowDownLeft, Receipt, CircleCheck, RotateCcw } from "lucide-react";
 import toast from "react-hot-toast";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../api";
 import { formatPretty, toISO } from "../lib/date";
-import { inSalary, salaryForDate } from "../lib/salary";
+import { belongsTo, salaryForDate } from "../lib/salary";
 import StatCard from "../components/StatCard";
 import DatePicker from "../components/DatePicker";
 import SalaryBar from "../components/SalaryBar";
@@ -47,7 +47,7 @@ export default function SalaryDetail() {
 
   const salary = salaries.find((s) => s.id === salaryId);
   const rows = useMemo(
-    () => (salary ? expenses.filter((e) => inSalary(salary, e.expense_date)) : []),
+    () => (salary ? expenses.filter((e) => belongsTo(salary, e)) : []),
     [expenses, salary]
   );
 
@@ -69,7 +69,7 @@ export default function SalaryDetail() {
     }
     try {
       await api.updateSalary(salaryId, { ...editForm, label: editForm.label.trim(), amount: Number(editForm.amount) }, token);
-      toast.success("Salary updated!");
+      toast.success("Saved!");
       setEditForm(null);
       await load();
     } catch (err) {
@@ -77,8 +77,21 @@ export default function SalaryDetail() {
     }
   };
 
+  // finish / reopen only exist for other amounts
+  const setFinished = async (finished) => {
+    try {
+      await (finished ? api.finishAmount : api.reopenAmount)(salaryId, token);
+      toast.success(finished ? "Moved to history." : "Running again.");
+      await load();
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
+
   const handleDelete = async () => {
-    if (!window.confirm(`Delete "${salary.label}"? Its expenses are kept and move into the salary before it.`)) return;
+    const where =
+      salary.kind === "other" ? "go back to the salary for their dates" : "move into the salary before it";
+    if (!window.confirm(`Delete "${salary.label}"? Its expenses are kept and ${where}.`)) return;
     try {
       await api.deleteSalary(salaryId, token);
       toast.success("Salary deleted.");
@@ -109,7 +122,8 @@ export default function SalaryDetail() {
     );
   }
 
-  const isCurrent = salaryForDate(salaries, toISO(new Date()))?.id === salary.id;
+  const isOther = salary.kind === "other";
+  const isCurrent = !isOther && salaryForDate(salaries, toISO(new Date()))?.id === salary.id;
 
   return (
     <div className="max-w-5xl mx-auto px-6 sm:px-8 py-8">
@@ -133,9 +147,16 @@ export default function SalaryDetail() {
                 Current
               </span>
             )}
+            {isOther && (
+              <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+                Other amount · {salary.finished ? "finished" : "running"}
+              </span>
+            )}
           </div>
           <p className="text-slate-500 dark:text-slate-400 text-sm">
-            {formatPretty(salary.received_date)} – {salary.end_date ? formatPretty(salary.end_date) : "next salary"}
+            {isOther
+              ? `Since ${formatPretty(salary.received_date)}`
+              : `${formatPretty(salary.received_date)} – ${salary.end_date ? formatPretty(salary.end_date) : "next salary"}`}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -146,6 +167,15 @@ export default function SalaryDetail() {
             <Pencil className="w-4 h-4" />
             Edit
           </button>
+          {isOther && (
+            <button
+              onClick={() => setFinished(!salary.finished)}
+              className="flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+            >
+              {salary.finished ? <RotateCcw className="w-4 h-4" /> : <CircleCheck className="w-4 h-4" />}
+              {salary.finished ? "Reopen" : "Finish"}
+            </button>
+          )}
           <button
             onClick={handleDelete}
             className="flex items-center gap-1.5 rounded-xl border border-red-200 dark:border-red-900 px-3 py-2 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition"
@@ -159,7 +189,7 @@ export default function SalaryDetail() {
       {editForm && (
         <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-card p-6 max-w-lg mb-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-slate-800 dark:text-slate-100">Edit salary</h3>
+            <h3 className="font-semibold text-slate-800 dark:text-slate-100">{isOther ? "Edit amount" : "Edit salary"}</h3>
             <button onClick={() => setEditForm(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
               <X className="w-4 h-4" />
             </button>
@@ -201,13 +231,17 @@ export default function SalaryDetail() {
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-        <StatCard icon={Banknote} label="Salary" value={currency(salary.amount)} accent={{ bg: "#f5f3ff", fg: "#7c3aed" }} />
-        <StatCard
-          icon={ArrowDownLeft}
-          label="Carried over"
-          value={`${salary.carried_over < 0 ? "-" : ""}${currency(Math.abs(salary.carried_over))}`}
-          accent={{ bg: "#eff6ff", fg: "#3b82f6" }}
-        />
+        <StatCard icon={Banknote} label={isOther ? "Amount" : "Salary"} value={currency(salary.amount)} accent={{ bg: "#f5f3ff", fg: "#7c3aed" }} />
+        {isOther ? (
+          <StatCard icon={Receipt} label="Expenses" value={salary.expense_count} accent={{ bg: "#fff7ed", fg: "#f97316" }} />
+        ) : (
+          <StatCard
+            icon={ArrowDownLeft}
+            label="Carried over"
+            value={`${salary.carried_over < 0 ? "-" : ""}${currency(Math.abs(salary.carried_over))}`}
+            accent={{ bg: "#eff6ff", fg: "#3b82f6" }}
+          />
+        )}
         <StatCard icon={Wallet} label="Spent" value={currency(salary.spent)} accent={{ bg: "#fdf2f8", fg: "#ec4899" }} />
         <StatCard
           icon={PiggyBank}
@@ -281,7 +315,7 @@ export default function SalaryDetail() {
               </table>
             </div>
             <p className="text-xs text-slate-400 px-4 py-3 border-t border-slate-100 dark:border-slate-800">
-              To edit an expense, use the History page. Changing its date moves it to another salary.
+              To edit an expense or change what it was paid from, use the History page.
             </p>
           </div>
         </div>
