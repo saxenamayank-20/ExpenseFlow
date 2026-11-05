@@ -186,7 +186,7 @@ export default function Salaries() {
           <form onSubmit={handleStart} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                {isOther ? "What is this amount?" : "Name"}
+                {isOther ? "What's this money for?" : "Name"}
               </label>
               <input
                 type="text"
@@ -227,7 +227,10 @@ export default function Salaries() {
       {/* other amounts running alongside the salary */}
       {running.length > 0 && (
         <>
-          <h2 className="font-semibold text-slate-800 dark:text-slate-100 mb-3">Running alongside your salary</h2>
+          <h2 className="font-semibold text-slate-800 dark:text-slate-100">Other Active Expense</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-3">
+            {"Money you're spending from alongside your salary, each with its own balance."}
+          </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
             {running.map((s) => (
               <div key={s.id} className="bg-white dark:bg-slate-900 rounded-2xl shadow-card p-6">
